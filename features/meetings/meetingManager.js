@@ -5,11 +5,13 @@ const { timeToMinutes, generateAvailabilityHeatmapImage } = require("./embedUtil
 const { runQueue } = require("./queueHandler");
 const dataStore = require("../../helpers/dataStore");
 
-async function showTopRanges(messageId, interaction) {
+async function showTopRanges(messageId, interaction, sendAsReply = 1) {
     const meeting = dataStore.getMeeting(messageId);
     if (!meeting) {
-        return interaction.reply({ content: 'Meeting not found or data corrupted.', flags: 64 });
+        const response = { content: 'Meeting not found or data corrupted.', flags: 64 };
+        return sendAsReply ? interaction.reply(response) : interaction.channel.send(response);
     }
+
     const results = [];
     for (const day of meeting.selectedDays) {
         for (const range of meeting.ranges) {
@@ -28,9 +30,11 @@ async function showTopRanges(messageId, interaction) {
             results.push({ day, start: range.start, end: range.end, avail: availList, notAvail: notList });
         }
     }
+
     results.sort((a, b) => b.avail.length - a.avail.length);
     const top = results.slice(0, 4);
     const topEmbed = new EmbedBuilder().setTitle('Top 4 Time Ranges').setColor(0x3498db);
+
     if (top.length === 0) {
         topEmbed.setDescription('No responses yet.');
     } else {
@@ -39,15 +43,17 @@ async function showTopRanges(messageId, interaction) {
             const notMentions = res.notAvail.map(id => `<@${id}>`).join(', ') || 'None';
             topEmbed.addFields({
                 name: `\`${res.day} ${res.start}–${res.end}\``,
-                value: `✅ ${availMentions}
-❌ ${notMentions}`
+                value: `✅ ${availMentions}\n❌ ${notMentions}`
             });
         }
     }
-    return interaction.reply({ embeds: [topEmbed], flags: 64 });
+
+    const payload = { embeds: [topEmbed], flags: 64 };
+    return sendAsReply ? interaction.reply(payload) : interaction.channel.send(payload);
 }
 
 async function finalizeMeeting(meetingId, interaction) {
+    await interaction.deferUpdate();
     await runQueue(meetingId, async () => {
         const meeting = dataStore.getMeeting(meetingId);
         if (!meeting) {
@@ -61,8 +67,8 @@ async function finalizeMeeting(meetingId, interaction) {
             .setImage('attachment://heatmap.png')
             .setColor(0x2ecc71);
         await interaction.channel.send({ embeds: [embedFinal], files: [att] });
+        await showTopRanges(meetingId, interaction, 0);
         dataStore.deleteMeeting(meetingId);
-        await interaction.deferUpdate();
         await botLog(`User <@${interaction.user.id}> finalized meeting ${meetingId}`);
     });
 }
