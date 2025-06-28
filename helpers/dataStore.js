@@ -3,7 +3,7 @@ const path = require("path");
 
 const DATA_FILE = path.join(__dirname, "../data.json");
 
-let data = { meetings: {} };
+let data = { meetings: {}, spinWinners: {} };
 const availabilities = new Map();
 
 function loadData() {
