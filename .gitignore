@@ -1,0 +1,25 @@
+# Node.js dependencies
+node_modules/
+package-lock.json
+
+# IDE/project files
+.idea/
+.vscode/
+
+# Operating system files
+.DS_Store
+Thumbs.db
+
+# Secrets
+config.json
+
+# Logs and runtime files
+*.log
+
+# Output and cache
+dist/
+build/
+.cache/
+
+# Local data store (optional, if it's not meant to be versioned)
+data.json
