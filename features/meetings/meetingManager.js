@@ -48,7 +48,7 @@ async function showTopRanges(messageId, interaction, sendAsReply = 1) {
         }
     }
 
-    const payload = { embeds: [topEmbed], flags: 64 };
+    const payload = { embeds: [topEmbed]};
     return sendAsReply ? interaction.reply(payload) : interaction.channel.send(payload);
 }
 
