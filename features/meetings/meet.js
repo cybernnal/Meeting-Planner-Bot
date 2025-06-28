@@ -502,7 +502,8 @@ async function handleMeetingCommand(interaction, client) {
     // Finalize selected meeting
     if (interaction.isStringSelectMenu() && interaction.customId.startsWith('finalize_menu_')) {
         const meetingId = interaction.values[0];
-        return meetingManager.finalizeMeeting(meetingId, interaction);
+        await meetingManager.finalizeMeeting(meetingId, interaction);
+        return meetingManager.showTopRanges(meetingId, interaction);
     }
 }
 
