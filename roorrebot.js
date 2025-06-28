@@ -19,7 +19,7 @@ initLogger(client);
 
 client.once(Events.ClientReady, () => {
     console.log(`Bot is online as ${client.user.tag}`);
-    botLog("🟢 RoorreBot is online.");
+    botLog("Oreo has awakened. The judgment shall now commence.");
 });
 
 client.on(Events.InteractionCreate, async interaction => {
