@@ -137,7 +137,7 @@ Accessed via:
 
 5. Run the bot:
    ```bash
-   node roorrebot.js
+   node index.js
    ```
 
 ---
