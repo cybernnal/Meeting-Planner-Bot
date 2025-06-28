@@ -118,14 +118,24 @@ Accessed via:
    npm install
    ```
 
-2. Create your `config.json`:
+2. Copy the example config file:
+   ```bash
+   cp config.example.json config.json
+   ```
+3. Edit config.json with your actual credentials:   
    ```json
    {
-     "token": "YOUR_DISCORD_BOT_TOKEN"
+      "token": "YOUR_DISCORD_BOT_TOKEN",
+      "clientId": "YOUR_BOT_CLIENT_ID",
+      "guildId": "YOUR_GUILD_ID"
    }
    ```
+4. Export the slash commands to your Discord server:
+   ```bash
+   node commands.js
+   ```
 
-3. Run the bot:
+5. Run the bot:
    ```bash
    node roorrebot.js
    ```
