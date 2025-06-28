@@ -18,7 +18,6 @@ const client = new Client({
 initLogger(client);
 
 client.once(Events.ClientReady, () => {
-    console.log(`Bot is online as ${client.user.tag}`);
     botLog("Oreo has awakened. The judgment shall now commence.");
 });
 
