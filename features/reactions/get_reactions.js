@@ -9,6 +9,7 @@ async function handleGetReactionsCommand(interaction) {
     const channelId = interaction.options.getString('channel_id');
 
     try {
+        await interaction.deferReply({ ephemeral: true });
         let targetChannel;
         if (channelId) {
             targetChannel = await interaction.client.channels.fetch(channelId);
@@ -62,13 +63,13 @@ async function handleGetReactionsCommand(interaction) {
         const imageBuffer = await generateReactionImage({ allEmojis, reactedUsers });
         const attachment = new AttachmentBuilder(imageBuffer, { name: 'reactions.png' });
 
-        await interaction.reply({ files: [attachment], ephemeral: true });
+        await interaction.editReply({ files: [attachment], ephemeral: true });
         botLog(`Successfully generated reaction image for message ID: ${messageId} in channel: ${targetChannel.id}`);
 
     } catch (error) {
         botLog(`Error generating reaction image for message ID: ${messageId}. Error: ${error.message}`);
         console.error('Error fetching message reactions:', error);
-        await interaction.reply({ content: 'Could not find the message or fetch its reactions. Please ensure the ID is correct and I have permission to view the message and its reactions.', ephemeral: true });
+        await interaction.editReply({ content: 'Could not find the message or fetch its reactions. Please ensure the ID is correct and I have permission to view the message and its reactions.', ephemeral: true });
     }
 }
 

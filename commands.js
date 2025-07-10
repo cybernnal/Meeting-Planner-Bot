@@ -15,15 +15,6 @@ const commands = [
         .setName('finishmeeting')
         .setDescription('Finalize a meeting and see the best time slots'),
     new SlashCommandBuilder()
-        .setName('schedule')
-        .setDescription('Schedule an event'),
-    new SlashCommandBuilder()
-        .setName('shutdown')
-        .setDescription('Shutdown the bot'),
-    new SlashCommandBuilder()
-        .setName('test_schedule')
-        .setDescription('Schedule an event for testing'),
-    new SlashCommandBuilder()
         .setName('get_reactions')
         .setDescription('Get reactions for a message')
         .addStringOption(option =>

@@ -18,7 +18,6 @@ function getEmojis() {
 }
 
 function loadData() {
-    console.log('Attempting to load data from:', DATA_FILE);
     if (fs.existsSync(DATA_FILE)) {
         try {
             const fileContent = fs.readFileSync(DATA_FILE, "utf8");
@@ -26,20 +25,17 @@ function loadData() {
             if (!data.meetings) data.meetings = {};
             if (!data.spinWinners) data.spinWinners = {};
             if (!data.scheduledEvents) data.scheduledEvents = [];
-            console.log('Data loaded successfully:', JSON.stringify(data, null, 2));
         } catch (err) {
             console.error("Error reading or parsing data file:", err);
             data = { meetings: {}, spinWinners: {}, scheduledEvents: [] };
         }
     } else {
-        console.log('Data file does not exist, initializing with default data.');
     }
 }
 
 function saveData() {
     try {
         fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), "utf8");
-        console.log('Data saved successfully:', JSON.stringify(data, null, 2));
     } catch (err) {
         console.error("Error saving data file:", err);
     }
@@ -81,8 +77,6 @@ function getSpinWinners() {
 }
 
 function getScheduledEventByMessageId(messageId) {
-    console.log('Searching for scheduled event with message ID:', messageId);
-    console.log('Current scheduledEvents array:', JSON.stringify(data.scheduledEvents, null, 2));
     return data.scheduledEvents.find(event => event.messageId === messageId);
 }
 
