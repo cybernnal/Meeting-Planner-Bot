@@ -1,6 +1,7 @@
 const { EmbedBuilder, AttachmentBuilder } = require('discord.js');
 const { botLog } = require('../../helpers/logger');
 const { generateReactionImage } = require('../../helpers/reactionImageGenerator');
+const emojiData = require('unicode-emoji-json');
 
 async function handleGetReactionsCommand(interaction) {
     if (!interaction.isChatInputCommand() || interaction.commandName !== 'get_reactions') return;
@@ -55,8 +56,9 @@ async function handleGetReactionsCommand(interaction) {
             if (reaction.emoji.id) { // Custom emoji
                 emojiName = reaction.emoji.name;
             } else { // Unicode emoji
-                const foundEmoji = predefinedEmojis.find(e => e.emoji === reaction.emoji.name);
-                emojiName = foundEmoji ? foundEmoji.name : reaction.emoji.name; // Use predefined name or raw unicode
+                const unicodeChar = reaction.emoji.name;
+                const emojiInfo = Object.values(emojiData).find(e => e.emoji === unicodeChar);
+                emojiName = emojiInfo ? emojiInfo.name.replace(/_/g, ' ') : unicodeChar; // Replace underscores with spaces
             }
 
             for (const user of users.values()) {
@@ -74,8 +76,9 @@ async function handleGetReactionsCommand(interaction) {
             if (r.emoji.id) {
                 return r.emoji.name;
             } else {
-                const foundEmoji = predefinedEmojis.find(e => e.emoji === r.emoji.name);
-                return foundEmoji ? foundEmoji.name : r.emoji.name;
+                const unicodeChar = r.emoji.name;
+                const emojiInfo = Object.values(emojiData).find(e => e.emoji === unicodeChar);
+                return emojiInfo ? emojiInfo.name.replace(/_/g, ' ') : unicodeChar;
             }
         })));
 
