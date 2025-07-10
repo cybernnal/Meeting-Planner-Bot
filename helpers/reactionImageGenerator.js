@@ -34,7 +34,7 @@ async function generateReactionImage(reactionsData) {
 
     
 
-    context.font = 'bold 18px sans-serif'; // Larger and bold for header
+    context.font = 'bold 18px sans-serif, Apple Color Emoji, Segoe UI Emoji, Noto Color Emoji'; // Larger and bold for header
     context.fillStyle = '#FFFFFF'; // White text
     context.textAlign = 'center';
     context.textBaseline = 'middle';
@@ -48,7 +48,7 @@ async function generateReactionImage(reactionsData) {
     // Draw data rows
     let rowIndex = 1;
     for (const [userId, userData] of reactedUsers.entries()) {
-        context.font = 'bold 20px sans-serif'; // Bold and larger for usernames
+            context.font = 'bold 20px sans-serif, Apple Color Emoji, Segoe UI Emoji, Noto Color Emoji'; // Bold and larger for usernames
     context.fillStyle = '#FFFFFF'; // White text
     context.fillText(userData.user.username, padding + cellWidth / 2, padding + cellHeight * (rowIndex + 0.5));
     allEmojis.forEach((emojiName, colIndex) => {

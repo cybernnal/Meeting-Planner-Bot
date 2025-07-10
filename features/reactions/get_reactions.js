@@ -83,10 +83,10 @@ async function handleGetReactionsCommand(interaction) {
         const attachment = new AttachmentBuilder(imageBuffer, { name: 'reactions.png' });
 
         await interaction.editReply({ files: [attachment], ephemeral: true });
-        botLog(`Successfully generated reaction image for message ID: ${messageId} in channel: ${targetChannel.id}`);
+        botLog(`Successfully generated reaction image for message ID: ${messageId}`, targetChannel.id, messageId);
 
     } catch (error) {
-        botLog(`Error generating reaction image for message ID: ${messageId}. Error: ${error.message}`);
+        botLog(`Error generating reaction image for message ID: ${messageId}. Error: ${error.message}`, targetChannel ? targetChannel.id : null, messageId);
         console.error('Error fetching message reactions:', error);
         await interaction.editReply({ content: 'Could not find the message or fetch its reactions. Please ensure the ID is correct and I have permission to view the message and its reactions.', ephemeral: true });
     }
