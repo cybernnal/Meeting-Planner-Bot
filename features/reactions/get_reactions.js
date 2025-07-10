@@ -10,14 +10,33 @@ async function handleGetReactionsCommand(interaction) {
 
     try {
         await interaction.deferReply({ ephemeral: true });
+
         let targetChannel;
         if (channelId) {
             targetChannel = await interaction.client.channels.fetch(channelId);
             if (!targetChannel || !targetChannel.isTextBased()) {
-                return interaction.reply({ content: 'Invalid channel ID provided.', ephemeral: true });
+                await interaction.editReply({ content: 'Invalid channel ID provided.', ephemeral: true });
+                return;
             }
         } else {
             targetChannel = interaction.channel;
+        }
+
+        // Permission Check
+        const me = interaction.guild.members.cache.get(interaction.client.user.id);
+        const permissionsInChannel = targetChannel.permissionsFor(me);
+
+        if (!permissionsInChannel.has('ViewChannel')) {
+            await interaction.editReply({ content: `I don't have permission to view the channel <#${targetChannel.id}>. Please grant me 'View Channel' permission.`, ephemeral: true });
+            return;
+        }
+        if (!permissionsInChannel.has('ReadMessageHistory')) {
+            await interaction.editReply({ content: `I don't have permission to read message history in <#${targetChannel.id}>. Please grant me 'Read Message History' permission.`, ephemeral: true });
+            return;
+        }
+        if (!permissionsInChannel.has('AttachFiles')) {
+            await interaction.editReply({ content: `I don't have permission to attach files in <#${targetChannel.id}>. Please grant me 'Attach Files' permission.`, ephemeral: true });
+            return;
         }
 
         const message = await targetChannel.messages.fetch(messageId);
