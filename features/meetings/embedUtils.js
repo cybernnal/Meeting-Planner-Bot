@@ -210,7 +210,6 @@ function generateAvailabilityHeatmapImage(days, ranges, availability) {
 
 
 module.exports = {
-    DAYS,
     getDayButtons,
     getControlRow,
     getConfirmDaysRow,

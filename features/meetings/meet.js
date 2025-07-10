@@ -16,8 +16,9 @@ const { botLog } = require("../../helpers/logger");
 const meetingManager = require("./meetingManager");
 const { MEET_AUTHORIZED_ROLE_IDS } = require('../../constants');
 
+const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
 const {
-    DAYS,
     getDayButtons,
     getControlRow,
     getConfirmDaysRow,
@@ -28,7 +29,7 @@ const {
     generateAvailabilityHeatmapImage
 } = require("./embedUtils");
 
-dataStore.loadData();
+
 
 const sessions = new Map();
 
