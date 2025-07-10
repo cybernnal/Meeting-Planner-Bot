@@ -6,7 +6,28 @@ function init(client) {
     clientRef = client;
 }
 
-async function botLog(message, channelId = null, messageId = null) {    if (!clientRef) {        console.log("[BOTLOG]", message);        return;    }    try {        const channel = await clientRef.channels.fetch(LOG_CHANNEL_ID);        if (channel && channel.isTextBased()) {            let logMessage = `📝 🎡 ${message}`;            if (channelId && messageId) {                const messageLink = `https://discord.com/channels/${guildId}/${channelId}/${messageId}`;                logMessage += `\nLink: ${messageLink}`;            } else if (channelId) {                const channelLink = `https.discord.com/channels/${guildId}/${channelId}`;                logMessage += `\nChannel: ${channelLink}`;            }            await channel.send(logMessage);        }    } catch (err) {        console.error("Failed to send bot log:", err);    }    console.log(message);}
+async function botLog(message, channelId = null, messageId = null) {
+    if (!clientRef) {
+        console.log("[BOTLOG]", message);
+        return;
+    }
+    try {
+        const channel = await clientRef.channels.fetch(LOG_CHANNEL_ID);
+        if (channel && channel.isTextBased()) {
+            let logMessage = `📝 🎡 ${message}`;
+            if (channelId && messageId) {
+                const messageLink = `https://discord.com/channels/${guildId}/${channelId}/${messageId}`;
+                logMessage += ` ${messageLink}`;
+            } else if (channelId) {
+                const channelLink = `https.discord.com/channels/${guildId}/${channelId}`;
+                logMessage += ` ${channelLink}`;
+            }
+            await channel.send(logMessage);
+        }
+    } catch (err) {
+        console.error("Failed to send bot log for message:", message, err);
+    }
+}
 
 module.exports = {
     init,

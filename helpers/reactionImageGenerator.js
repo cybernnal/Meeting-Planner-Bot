@@ -5,11 +5,23 @@ async function generateReactionImage(reactionsData) {
     const { allEmojis, reactedUsers } = reactionsData;
     const predefinedEmojis = dataStore.getEmojis();
 
-    const cellWidth = 120;
     const cellHeight = 50;
     const padding = 15;
 
-    const canvasWidth = cellWidth * (allEmojis.length + 1) + padding * 2;
+    // Calculate max width for usernames
+    context.font = 'bold 20px sans-serif, Apple Color Emoji, Segoe UI Emoji, Noto Color Emoji';
+    let maxUsernameWidth = 0;
+    for (const [userId, userData] of reactedUsers.entries()) {
+        const textWidth = context.measureText(userData.user.username).width;
+        if (textWidth > maxUsernameWidth) {
+            maxUsernameWidth = textWidth;
+        }
+    }
+
+    const userColumnWidth = Math.max(120, maxUsernameWidth + 30); // Ensure a minimum width, add padding
+    const emojiColumnWidth = 120; // Fixed width for emoji columns
+
+    const canvasWidth = userColumnWidth + (emojiColumnWidth * allEmojis.length) + padding * 2;
     const canvasHeight = cellHeight * (reactedUsers.size + 1) + padding * 2;
 
     const canvas = createCanvas(canvasWidth, canvasHeight);
@@ -69,9 +81,9 @@ async function generateReactionImage(reactionsData) {
     context.textBaseline = 'middle';
 
     // Draw header row
-    // context.fillText('User', padding + cellWidth / 2, padding + cellHeight / 2);
+    context.fillText('User', padding + userColumnWidth / 2, padding + cellHeight / 2);
     allEmojis.forEach((emojiName, index) => {
-        context.fillText(emojiName, padding + cellWidth * (index + 1.5), padding + cellHeight / 2);
+        context.fillText(emojiName, padding + userColumnWidth + emojiColumnWidth * index + emojiColumnWidth / 2, padding + cellHeight / 2);
     });
 
     // Draw data rows
@@ -79,12 +91,12 @@ async function generateReactionImage(reactionsData) {
     for (const [userId, userData] of reactedUsers.entries()) {
             context.font = 'bold 20px sans-serif, Apple Color Emoji, Segoe UI Emoji, Noto Color Emoji'; // Bold and larger for usernames
     context.fillStyle = '#FFFFFF'; // White text
-    context.fillText(userData.user.username, padding + cellWidth / 2, padding + cellHeight * (rowIndex + 0.5));
+    context.fillText(userData.user.username, padding + userColumnWidth / 2, padding + cellHeight * (rowIndex + 0.5));
     allEmojis.forEach((emojiName, colIndex) => {
         const hasReacted = userData.emojis.has(emojiName);
         context.fillStyle = hasReacted ? '#00FF00' : '#FF0000'; // Green for ✅, Red for ❌
         const iconSize = 20; // Size of the checkmark/cross
-        const iconX = padding + cellWidth * (colIndex + 1.5);
+        const iconX = padding + userColumnWidth + emojiColumnWidth * colIndex + emojiColumnWidth / 2;
         const iconY = padding + cellHeight * (rowIndex + 0.5);
 
         if (hasReacted) {

@@ -57,7 +57,7 @@ async function handleGetReactionsCommand(interaction) {
                 emojiName = reaction.emoji.name;
             } else { // Unicode emoji
                 const unicodeChar = reaction.emoji.name;
-                const emojiInfo = Object.values(emojiData).find(e => e.emoji === unicodeChar);
+                const emojiInfo = emojiData[unicodeChar];
                 emojiName = emojiInfo ? emojiInfo.name.replace(/_/g, ' ') : unicodeChar; // Replace underscores with spaces
             }
 
@@ -77,7 +77,7 @@ async function handleGetReactionsCommand(interaction) {
                 return r.emoji.name;
             } else {
                 const unicodeChar = r.emoji.name;
-                const emojiInfo = Object.values(emojiData).find(e => e.emoji === unicodeChar);
+                const emojiInfo = emojiData[unicodeChar];
                 return emojiInfo ? emojiInfo.name.replace(/_/g, ' ') : unicodeChar;
             }
         })));
