@@ -1,7 +1,6 @@
 const { EmbedBuilder, AttachmentBuilder } = require('discord.js');
 const { botLog } = require('../../helpers/logger');
 const { generateReactionImage } = require('../../helpers/reactionImageGenerator');
-const emojiData = require('unicode-emoji-json');
 
 async function handleGetReactionsCommand(interaction) {
     if (!interaction.isChatInputCommand() || interaction.commandName !== 'get_reactions') return;
@@ -58,9 +57,7 @@ async function handleGetReactionsCommand(interaction) {
             if (reaction.emoji.id) { // Custom emoji
                 emojiName = reaction.emoji.name;
             } else { // Unicode emoji
-                const unicodeChar = reaction.emoji.name;
-                const emojiInfo = emojiData[unicodeChar];
-                emojiName = emojiInfo ? emojiInfo.name.replace(/_/g, ' ') : unicodeChar; // Replace underscores with spaces
+                emojiName = reaction.emoji.name; // Use the unicode character directly
             }
 
             for (const user of users.values()) {
@@ -78,9 +75,7 @@ async function handleGetReactionsCommand(interaction) {
             if (r.emoji.id) {
                 return r.emoji.name;
             } else {
-                const unicodeChar = r.emoji.name;
-                const emojiInfo = emojiData[unicodeChar];
-                return emojiInfo ? emojiInfo.name.replace(/_/g, ' ') : unicodeChar;
+                return r.emoji.name; // Use the unicode character directly
             }
         })));
 
