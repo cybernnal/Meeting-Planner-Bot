@@ -32,7 +32,36 @@ async function generateReactionImage(reactionsData) {
         context.fillRect(padding, y, canvasWidth - 2 * padding, cellHeight);
     }
 
-    
+    // Function to draw a custom checkmark
+    function drawCheckmark(ctx, x, y, size, color) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.strokeStyle = color;
+        ctx.lineWidth = size / 8;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.moveTo(x - size / 3, y);
+        ctx.lineTo(x - size / 10, y + size / 3);
+        ctx.lineTo(x + size / 3, y - size / 3);
+        ctx.stroke();
+        ctx.restore();
+    }
+
+    // Function to draw a custom cross
+    function drawCross(ctx, x, y, size, color) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.strokeStyle = color;
+        ctx.lineWidth = size / 8;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.moveTo(x - size / 3, y - size / 3);
+        ctx.lineTo(x + size / 3, y + size / 3);
+        ctx.moveTo(x + size / 3, y - size / 3);
+        ctx.lineTo(x - size / 3, y + size / 3);
+        ctx.stroke();
+        ctx.restore();
+    }
 
     context.font = 'bold 18px sans-serif, Apple Color Emoji, Segoe UI Emoji, Noto Color Emoji'; // Larger and bold for header
     context.fillStyle = '#FFFFFF'; // White text
@@ -54,8 +83,15 @@ async function generateReactionImage(reactionsData) {
     allEmojis.forEach((emojiName, colIndex) => {
         const hasReacted = userData.emojis.has(emojiName);
         context.fillStyle = hasReacted ? '#00FF00' : '#FF0000'; // Green for ✅, Red for ❌
-        const indicator = hasReacted ? '✅' : '❌';
-        context.fillText(indicator, padding + cellWidth * (colIndex + 1.5), padding + cellHeight * (rowIndex + 0.5));
+        const iconSize = 20; // Size of the checkmark/cross
+        const iconX = padding + cellWidth * (colIndex + 1.5);
+        const iconY = padding + cellHeight * (rowIndex + 0.5);
+
+        if (hasReacted) {
+            drawCheckmark(context, iconX, iconY, iconSize, '#00FF00'); // Green
+        } else {
+            drawCross(context, iconX, iconY, iconSize, '#FF0000'); // Red
+        }
     });
         rowIndex++;
     }
