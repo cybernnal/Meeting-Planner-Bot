@@ -9,6 +9,8 @@ async function handleGetReactionsCommand(interaction) {
     const messageId = interaction.options.getString('message_id');
     const channelId = interaction.options.getString('channel_id');
 
+    let targetChannel = null; // Initialize targetChannel to null
+
     try {
         await interaction.deferReply({ ephemeral: true });
 

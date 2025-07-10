@@ -23,6 +23,7 @@ async function botLog(message, channelId = null, messageId = null) {
                 logMessage += ` ${channelLink}`;
             }
             await channel.send(logMessage);
+            console.log(logMessage);
         }
     } catch (err) {
         console.error("Failed to send bot log for message:", message, err);
