@@ -31,7 +31,7 @@ const {
     createTimeRangeEmbed
 } = require("./embedUtils");
 
-const { getMeeting, createMeeting, endMeeting, clearMeetings, setMeetingInterval, getMeetingByChannel } = require("../../helpers/meetingHelpers");
+const { getMeeting, createMeeting, endMeeting, clearMeetings, setMeetingInterval, getMeetingByChannel, isValidTimeFormat, hasTimeRangeOverlap } = require("../../helpers/meetingHelpers");
 
 const sessions = new Map();
 
