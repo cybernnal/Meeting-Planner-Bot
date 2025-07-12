@@ -13,8 +13,8 @@ const {
 const dataStore = require("../../helpers/dataStore");
 const { runQueue } = require("./queueHandler");
 const { botLog } = require("../../helpers/logger");
-const meetingManager = require("./meetingManager");
 const { MEET_AUTHORIZED_ROLE_IDS } = require('../../constants');
+const meetingManager = require('./meetingManager');
 
 const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
@@ -24,486 +24,434 @@ const {
     getConfirmDaysRow,
     getFinalConfirmRow,
     getAvailabilityButtons,
+    generateAvailabilityHeatmapImage,
     timeToMinutes,
-    roundTimeString,
-    generateAvailabilityHeatmapImage
+    roundTimeString
 } = require("./embedUtils");
 
-
+const { getMeeting, createMeeting, endMeeting, clearMeetings, setMeetingInterval, getMeetingByChannel } = require("../../helpers/meetingHelpers");
 
 const sessions = new Map();
 
+async function handleMeetCommand(interaction) {
+    const userId = interaction.user.id;
+    sessions.set(userId, {
+        selectedDays: new Set(DAYS),
+        ranges: []
+    });
+    const session = sessions.get(userId);
+    session.owner = userId;
+    session.channelId = interaction.channel.id;
+    const embed = createDaySelectionEmbed(session.selectedDays, true);
+    await interaction.deferReply({ ephemeral: true });
+    await interaction.editReply({
+        embeds: [embed],
+        components: [...getDayButtons(session.selectedDays), getConfirmDaysRow()],
+    });
+}
+
+async function handleDayToggleButton(interaction) {
+    const userId = interaction.user.id;
+    const day = interaction.customId.split('_')[1];
+    const session = sessions.get(userId);
+    if (!session) return;
+    if (session.selectedDays.has(day)) {
+        session.selectedDays.delete(day);
+    } else {
+        session.selectedDays.add(day);
+    }
+    const embed = createDaySelectionEmbed(session.selectedDays, session.selectedDays.size > 0);
+    return interaction.update({
+        embeds: [embed],
+        components: [...getDayButtons(session.selectedDays), getConfirmDaysRow()]
+    });
+}
+
+async function handleConfirmDaysButton(interaction) {
+    const userId = interaction.user.id;
+    const session = sessions.get(userId);
+    if (!session || session.selectedDays.size === 0) {
+        return interaction.followUp({ content: 'Select at least one day.', ephemeral: true });
+    }
+    const embed = createTimeRangeEmbed(session.selectedDays, session.ranges);
+    return interaction.update({
+        embeds: [embed],
+        components: [getControlRow(), getFinalConfirmRow()]
+    });
+}
+
+async function handleAddRangeButton(interaction) {
+    const userId = interaction.user.id;
+    const session = sessions.get(userId);
+    if (!session || session.selectedDays.size === 0) {
+        return interaction.followUp({ content: 'You must select at least one day before adding a range.', ephemeral: true });
+    }
+    const modal = new ModalBuilder().setCustomId('add_modal').setTitle('Add Time Range');
+    modal.addComponents(
+        new ActionRowBuilder().addComponents(
+            new TextInputBuilder().setCustomId('start').setLabel('Start Time (HH:MM)').setStyle(TextInputStyle.Short).setRequired(true)
+        ),
+        new ActionRowBuilder().addComponents(
+            new TextInputBuilder().setCustomId('end').setLabel('End Time (HH:MM)').setStyle(TextInputStyle.Short).setRequired(true)
+        )
+    );
+    return interaction.showModal(modal);
+}
+
+async function handleFinalConfirmButton(interaction) {
+    const userId = interaction.user.id;
+    const session = sessions.get(userId);
+    if (!session || session.selectedDays.size === 0 || session.ranges.length === 0) {
+        return interaction.followUp({ content: 'Select days and add at least one time range.', ephemeral: true });
+    }
+    const modal = new ModalBuilder().setCustomId('final_modal').setTitle('Set Meeting Title/Description');
+    modal.addComponents(
+        new ActionRowBuilder().addComponents(
+            new TextInputBuilder().setCustomId('title').setLabel('Meeting Title').setStyle(TextInputStyle.Short).setRequired(true)
+        ),
+        new ActionRowBuilder().addComponents(
+            new TextInputBuilder().setCustomId('desc').setLabel('Meeting Description').setStyle(TextInputStyle.Paragraph).setRequired(true)
+        )
+    );
+    return interaction.showModal(modal);
+}
+
+async function handleAddModalSubmit(interaction) {
+    await interaction.deferUpdate();
+    const userId = interaction.user.id;
+    const session = sessions.get(userId);
+    if (!session || session.selectedDays.size === 0) return;
+    const startRaw = interaction.fields.getTextInputValue('start');
+    const endRaw = interaction.fields.getTextInputValue('end');
+
+    if (!isValidTimeFormat(startRaw) || !isValidTimeFormat(endRaw) || (endRaw === '24:00' && startRaw === '24:00')) {
+        return interaction.followUp({ content: 'Invalid time format. Use HH:MM (24h).', ephemeral: true });
+    }
+
+    const start = roundTimeString(startRaw);
+    const end = roundTimeString(endRaw);
+
+    if (startRaw !== start || endRaw !== end) {
+        await interaction.followUp({ content: `Times rounded to nearest quarter hour: ${startRaw} -> ${start}, ${endRaw} -> ${end}`, ephemeral: true });
+    }
+
+    const s = timeToMinutes(start), e = timeToMinutes(end);
+    if (e <= s && !(e === 1440 && s === 0)) {
+        return interaction.followUp({ content: 'End must be after start.', ephemeral: true });
+    }
+    if ((e - s) < 30 && !(e === 1440 && s === 0)) {
+        return interaction.followUp({ content: 'Time range must be at least 30 minutes.', ephemeral: true });
+    }
+    if (hasTimeRangeOverlap(start, end, session.ranges)) {
+        return interaction.followUp({ content: 'The time range overlaps with an existing range.', ephemeral: true });
+    }
+
+    session.ranges.push({ start, end });
+    const embed = createTimeRangeEmbed(session.selectedDays, session.ranges);
+    await interaction.editReply({
+        embeds: [embed],
+        components: [getControlRow(), getFinalConfirmRow()]
+    });
+}
+
+async function handleFinalModalSubmit(interaction, client) {
+    const userId = interaction.user.id;
+    const session = sessions.get(userId);
+    if (!session) return;
+
+    const embedTitle = interaction.fields.getTextInputValue('title');
+    const embedDesc = interaction.fields.getTextInputValue('desc');
+    const { selectedDays, ranges, owner, channelId } = session;
+
+    const buffer = await generateAvailabilityHeatmapImage([...selectedDays], ranges, {}, interaction.guild);
+    const attachment = new AttachmentBuilder(buffer, { name: 'heatmap.png' });
+
+    const embed = new EmbedBuilder()
+        .setTitle(embedTitle)
+        .setDescription(embedDesc)
+        .setImage('attachment://heatmap.png')
+        .setColor(0x2ecc71);
+
+    const msg = await client.channels.cache.get(channelId).send({
+        embeds: [embed],
+        files: [attachment],
+        components: [...getAvailabilityButtons(selectedDays)]
+    });
+
+    const record = {
+        owner: owner,
+        selectedDays: [...selectedDays],
+        ranges,
+        userAvailability: {},
+        embedTitle,
+        embedDesc,
+        channelId: channelId
+    };
+    dataStore.addMeeting(msg.id, record);
+    await interaction.deferUpdate();
+    sessions.delete(userId);
+    await botLog(`User <@${userId}> created meeting ${msg.id}`);
+}
+
+async function handleAvailabilityButton(interaction) {
+    const day = interaction.customId.split('_')[1];
+    const msgId = interaction.message.id;
+    const meeting = dataStore.getMeeting(msgId);
+    if (!meeting) {
+        return interaction.followUp({ content: 'Meeting not found or data corrupted.', ephemeral: true });
+    }
+    const modal = new ModalBuilder().setCustomId(`modal_${msgId}_${day}`).setTitle(`${day}`);
+    modal.addComponents(
+        new ActionRowBuilder().addComponents(
+            new TextInputBuilder().setCustomId('start').setLabel('Start Time (HH:MM)').setStyle(TextInputStyle.Short).setRequired(true)
+        ),
+        new ActionRowBuilder().addComponents(
+            new TextInputBuilder().setCustomId('end').setLabel('End Time (HH:MM)').setStyle(TextInputStyle.Short).setRequired(true)
+        )
+    );
+    return interaction.showModal(modal);
+}
+
+async function handleAvailabilityModalSubmit(interaction) {
+    await interaction.deferUpdate();
+    const userId = interaction.user.id;
+    const parts = interaction.customId.split('_');
+    const msgId = parts[1];
+    const day = parts.slice(2).join('_');
+    const meeting = dataStore.getMeeting(msgId);
+    if (!meeting) {
+        return interaction.followUp({ content: 'Meeting not found or data corrupted.', ephemeral: true });
+    }
+    const startRaw = interaction.fields.getTextInputValue('start');
+    const endRaw = interaction.fields.getTextInputValue('end');
+
+    if (!isValidTimeFormat(startRaw) || !isValidTimeFormat(endRaw) || (endRaw === '24:00' && startRaw === '24:00')) {
+        return interaction.followUp({ content: 'Invalid time format. Use HH:MM (24h).', ephemeral: true });
+    }
+
+    const start = roundTimeString(startRaw);
+    const end = roundTimeString(endRaw);
+
+    if (startRaw !== start || endRaw !== end) {
+        await interaction.followUp({ content: `Times rounded to nearest quarter hour: ${startRaw} -> ${start}, ${endRaw} -> ${end}`, ephemeral: true });
+    }
+
+    const s = timeToMinutes(start), e = timeToMinutes(end);
+    if (e <= s && !(e === 1440 && s === 0)) {
+        return interaction.followUp({ content: 'End must be after start.', ephemeral: true });
+    }
+
+    await runQueue(msgId, async () => {
+        meeting.userAvailability[userId] = meeting.userAvailability[userId] || {};
+        if (!meeting.userAvailability[userId][day]) {
+            meeting.userAvailability[userId][day] = [];
+        }
+        if (hasTimeRangeOverlap(start, end, meeting.userAvailability[userId][day])) {
+            return interaction.followUp({ content: 'That range overlaps with one you already submitted.', ephemeral: true });
+        }
+        meeting.userAvailability[userId][day].push([start, end]);
+        dataStore.updateMeeting(msgId, meeting);
+
+        const buf = await generateAvailabilityHeatmapImage(
+            meeting.selectedDays,
+            meeting.ranges,
+            meeting.userAvailability,
+            interaction.guild
+        );
+        const att = new AttachmentBuilder(buf, { name: 'heatmap.png' });
+        const updatedEmbed = EmbedBuilder.from(interaction.message.embeds[0])
+            .setDescription(`Updated: ${new Date().toLocaleString('en-GB', { timeZoneName: 'short' })}`)
+            .setImage('attachment://heatmap.png');
+        await interaction.message.edit({
+            embeds: [updatedEmbed],
+            files: [att]
+        });
+        await botLog(`User <@${userId}> added availability for meeting ${msgId}`);
+    });
+}
+
+async function handleListMeetingsCommand(interaction) {
+    await interaction.deferReply({ ephemeral: true });
+    const meetings = dataStore.getAllMeetings();
+    const meetingIds = Object.keys(meetings);
+    if (meetingIds.length === 0) {
+        return interaction.editReply({ content: 'No active meetings found.' });
+    }
+    const { embeds, components } = getPaginationComponents(
+        Object.entries(meetings),
+        1,
+        10,
+        'list',
+        'Meetings',
+        'Select a meeting to repost'
+    );
+    return interaction.editReply({ embeds, components });
+}
+
+async function handleListMeetingsPagination(interaction) {
+    const parts = interaction.customId.split('_');
+    const dir = parts[1];
+    const pg = parseInt(parts[2]);
+    const meetings = dataStore.getAllMeetings();
+    const currentPage = dir === 'prev' ? pg - 1 : pg + 1;
+    const { embeds, components } = getPaginationComponents(
+        Object.entries(meetings),
+        currentPage,
+        10,
+        'list',
+        'Meetings',
+        'Select a meeting to repost'
+    );
+    return interaction.update({ embeds, components });
+}
+
+async function handleListMeetingsSelect(interaction, client) {
+    const userId = interaction.user.id;
+    const selectedId = interaction.values[0];
+    const record = dataStore.getMeeting(selectedId);
+    if (!record) {
+        return interaction.followUp({ content: 'Selected meeting not found.', ephemeral: true });
+    }
+    await runQueue(selectedId, async () => {
+        if (!dataStore.getMeeting(selectedId)) {
+            return interaction.followUp({ content: 'That meeting was already removed or finalized.', ephemeral: true });
+        }
+        try {
+            if (record.channelId) {
+                const channel = await client.channels.fetch(record.channelId);
+                const oldMsg = await channel.messages.fetch(selectedId);
+                await oldMsg.delete();
+            }
+        } catch (err) {
+            console.warn('Failed to delete old meeting message:', err);
+        }
+        const buffer = await generateAvailabilityHeatmapImage(record.selectedDays, record.ranges, record.userAvailability, interaction.guild);
+        const attachment = new AttachmentBuilder(buffer, { name: 'heatmap.png' });
+        const embed = new EmbedBuilder()
+            .setTitle(record.embedTitle || 'Weekly Availability')
+            .setDescription(record.embedDesc || `Reposted: ${new Date().toLocaleString('en-GB', { timeZoneName: 'short' })}`)
+            .setImage('attachment://heatmap.png')
+            .setColor(0x2ecc71);
+        const newMsg = await interaction.channel.send({
+            embeds: [embed],
+            files: [attachment],
+            components: [...getAvailabilityButtons(record.selectedDays)]
+        });
+        record.channelId = interaction.channel.id;
+        dataStore.addMeeting(newMsg.id, record);
+        dataStore.deleteMeeting(selectedId);
+        await interaction.deferUpdate();
+        await botLog(`User <@${userId}> moved meeting ${selectedId} to ${newMsg.id}`);
+    });
+}
+
+async function handleFinishMeetingCommand(interaction) {
+    await interaction.deferReply({ ephemeral: true });
+    const userId = interaction.user.id;
+    const userRoles = interaction.member.roles.cache.map(r => r.id);
+    const meetings = Object.entries(dataStore.getAllMeetings()).filter(([_, m]) =>
+        m.owner === userId || userRoles.some(role => MEET_AUTHORIZED_ROLE_IDS.includes(role))
+    );
+    if (meetings.length === 0) {
+        return interaction.editReply({ content: 'You have no meetings you can finalize.' });
+    }
+    const { embeds, components } = getPaginationComponents(
+        meetings,
+        1,
+        25,
+        'finalize',
+        'Finalize Meetings',
+        'Select a meeting to finalize',
+        true
+    );
+    return interaction.editReply({ embeds, components });
+}
+
+async function handleFinishMeetingPagination(interaction) {
+    const userId = interaction.user.id;
+    const parts = interaction.customId.split('_');
+    const dir = parts[1];
+    const pg = parseInt(parts[2]);
+    const userRoles = interaction.member.roles.cache.map(r => r.id);
+    const meetings = Object.entries(dataStore.getAllMeetings()).filter(([_, m]) =>
+        m.owner === userId || userRoles.some(role => MEET_AUTHORIZED_ROLE_IDS.includes(role))
+    );
+    const currentPage = dir === 'prev' ? pg - 1 : pg + 1;
+    const { embeds, components } = getPaginationComponents(
+        meetings,
+        currentPage,
+        25,
+        'finalize',
+        'Finalize Meetings',
+        'Select a meeting to finalize',
+        true
+    );
+    return interaction.update({ embeds, components });
+}
+
+async function handleFinishMeetingSelect(interaction) {
+    const meetingId = interaction.values[0];
+    return meetingManager.finalizeMeeting(meetingId, interaction);
+}
 
 async function handleMeetingCommand(interaction, client) {
     const userId = interaction.user.id;
 
-    // /meet command: start a new meeting setup
-    if (interaction.isChatInputCommand() && interaction.commandName === 'meet') {
-        sessions.set(userId, {
-            selectedDays: new Set(DAYS),
-            ranges: []
-        });
-        const session = sessions.get(userId);
-        session.owner = userId;
-        session.channelId = interaction.channel.id;
-        const embed = new EmbedBuilder()
-            .setTitle('Select Days')
-            .setDescription(`Selected Days: ${[...session.selectedDays].join(', ')}. Press Confirm Days to continue.`)
-            .setColor(0x3498db);
-        await interaction.reply({
-            embeds: [embed],
-            components: [...getDayButtons(new Set(DAYS)), getConfirmDaysRow()],
-            flags: 64
-        });
-        await interaction.fetchReply();
-        return;
+    if (interaction.isChatInputCommand()) {
+        if (interaction.commandName === 'meet') {
+            return handleMeetCommand(interaction);
+        }
+        if (interaction.commandName === 'listmeetings') {
+            return handleListMeetingsCommand(interaction);
+        }
+        if (interaction.commandName === 'finishmeeting') {
+            return handleFinishMeetingCommand(interaction);
+        }
     }
 
-    // Toggle day selection button
-    if (interaction.isButton() && interaction.customId.startsWith('toggle_')) {
-        const day = interaction.customId.split('_')[1];
-        const session = sessions.get(userId);
-        if (!session) return;
-        if (session.selectedDays.has(day)) {
-            session.selectedDays.delete(day);
-        } else {
-            session.selectedDays.add(day);
+    if (interaction.isButton()) {
+        if (interaction.customId.startsWith('toggle_')) {
+            return handleDayToggleButton(interaction);
         }
-        const embed = new EmbedBuilder()
-            .setTitle('Select Days')
-            .setDescription(session.selectedDays.size > 0
-                ? `Selected Days: ${[...session.selectedDays].join(', ')}`
-                : 'No days selected! Please select at least one.')
-            .setColor(session.selectedDays.size > 0 ? 0x3498db : 0xe74c3c);
-        return interaction.update({
-            embeds: [embed],
-            components: [...getDayButtons(session.selectedDays), getConfirmDaysRow()]
-        });
+        if (interaction.customId === 'confirm_days') {
+            return handleConfirmDaysButton(interaction);
+        }
+        if (interaction.customId === 'add_range') {
+            return handleAddRangeButton(interaction);
+        }
+        if (interaction.customId === 'final_confirm') {
+            return handleFinalConfirmButton(interaction);
+        }
+        if (interaction.customId.startsWith('avail_')) {
+            return handleAvailabilityButton(interaction);
+        }
+        if (interaction.customId.startsWith('list_prev_') || interaction.customId.startsWith('list_next_')) {
+            return handleListMeetingsPagination(interaction);
+        }
+        if (interaction.customId.startsWith('finalize_prev_') || interaction.customId.startsWith('finalize_next_')) {
+            return handleFinishMeetingPagination(interaction);
+        }
     }
 
-    // Confirm selected days
-    if (interaction.isButton() && interaction.customId === 'confirm_days') {
-        const session = sessions.get(userId);
-        if (!session || session.selectedDays.size === 0) {
-            return interaction.reply({ content: 'Select at least one day.', flags: 64 });
+    if (interaction.isModalSubmit()) {
+        if (interaction.customId === 'add_modal') {
+            return handleAddModalSubmit(interaction);
         }
-        const embed = new EmbedBuilder()
-            .setTitle('Add Time Ranges')
-            .setDescription(`Selected Days: ${[...session.selectedDays].join(', ')}`)
-            .setColor(0x3498db);
-        return interaction.update({
-            embeds: [embed],
-            components: [getControlRow(), getFinalConfirmRow()]
-        });
+        if (interaction.customId === 'final_modal') {
+            return handleFinalModalSubmit(interaction, client);
+        }
+        if (interaction.customId.startsWith('modal_')) {
+            return handleAvailabilityModalSubmit(interaction);
+        }
     }
 
-    // Add time range button
-    if (interaction.isButton() && interaction.customId === 'add_range') {
-        const session = sessions.get(userId);
-        if (!session || session.selectedDays.size === 0) {
-            return interaction.reply({ content: 'You must select at least one day before adding a range.', flags: 64 });
+    if (interaction.isStringSelectMenu()) {
+        if (interaction.customId.startsWith('list_select_')) {
+            return handleListMeetingsSelect(interaction, client);
         }
-        const modal = new ModalBuilder().setCustomId('add_modal').setTitle('Add Time Range');
-        modal.addComponents(
-            new ActionRowBuilder().addComponents(
-                new TextInputBuilder().setCustomId('start').setLabel('Start Time (HH:MM)').setStyle(TextInputStyle.Short).setRequired(true)
-            ),
-            new ActionRowBuilder().addComponents(
-                new TextInputBuilder().setCustomId('end').setLabel('End Time (HH:MM)').setStyle(TextInputStyle.Short).setRequired(true)
-            )
-        );
-        return interaction.showModal(modal);
-    }
-
-    // Final confirm button to set title/description
-    if (interaction.isButton() && interaction.customId === 'final_confirm') {
-        const session = sessions.get(userId);
-        if (!session || session.selectedDays.size === 0 || session.ranges.length === 0) {
-            return interaction.reply({ content: 'Select days and add at least one time range.', flags: 64 });
+        if (interaction.customId.startsWith('finalize_menu_')) {
+            return handleFinishMeetingSelect(interaction);
         }
-        const modal = new ModalBuilder().setCustomId('final_modal').setTitle('Set Meeting Title/Description');
-        modal.addComponents(
-            new ActionRowBuilder().addComponents(
-                new TextInputBuilder().setCustomId('title').setLabel('Meeting Title').setStyle(TextInputStyle.Short).setRequired(true)
-            ),
-            new ActionRowBuilder().addComponents(
-                new TextInputBuilder().setCustomId('desc').setLabel('Meeting Description').setStyle(TextInputStyle.Paragraph).setRequired(true)
-            )
-        );
-        return interaction.showModal(modal);
-    }
-
-    // Modal submit for adding time range
-    if (interaction.isModalSubmit() && interaction.customId === 'add_modal') {
-        const session = sessions.get(userId);
-        if (!session || session.selectedDays.size === 0) return;
-        const startRaw = interaction.fields.getTextInputValue('start');
-        const endRaw = interaction.fields.getTextInputValue('end');
-        const regex = /^([01]?[0-9]|2[0-3]):([0-5][0-9])$/;
-        if (!regex.test(startRaw) || !regex.test(endRaw)) {
-            return interaction.reply({ content: 'Invalid time format. Use HH:MM (24h).', flags: 64 });
-        }
-        const start = roundTimeString(startRaw);
-        const end = roundTimeString(endRaw);
-        const s = timeToMinutes(start), e = timeToMinutes(end);
-        if (e <= s) {
-            return interaction.reply({ content: 'End must be after start.', flags: 64 });
-        }
-        for (const r of session.ranges) {
-            const rs = timeToMinutes(r.start), re = timeToMinutes(r.end);
-            if (s < re && e > rs) {
-                return interaction.reply({ content: 'The time range overlaps with an existing range.', flags: 64 });
-            }
-        }
-        session.ranges.push({ start, end });
-        // Update embed with added ranges
-        const rangeLines = session.ranges.map(r => `- ${r.start}–${r.end}`).join('\n');
-        const embed = new EmbedBuilder()
-            .setTitle('Add Time Ranges')
-            .setDescription(`Selected Days: ${[...session.selectedDays].join(', ')}\nTime Ranges:\n${rangeLines}`)
-            .setColor(0x3498db);
-        return interaction.update({
-            embeds: [embed],
-            components: [getControlRow(), getFinalConfirmRow()]
-        });
-    }
-
-    // Modal submission for final meeting creation
-    if (interaction.isModalSubmit() && interaction.customId === 'final_modal') {
-        const session = sessions.get(userId);
-        if (!session) return;
-        const embedTitle = interaction.fields.getTextInputValue('title');
-        const embedDesc = interaction.fields.getTextInputValue('desc');
-        const { selectedDays, ranges, owner, channelId } = session;
-        const buffer = await generateAvailabilityHeatmapImage([...selectedDays], ranges, {});
-        const attachment = new AttachmentBuilder(buffer, { name: 'heatmap.png' });
-        const embed = new EmbedBuilder()
-            .setTitle(embedTitle)
-            .setDescription(embedDesc)
-            .setImage('attachment://heatmap.png')
-            .setColor(0x2ecc71);
-        const msg = await client.channels.cache.get(channelId).send({
-            embeds: [embed],
-            files: [attachment],
-            components: [...getAvailabilityButtons(), new ActionRowBuilder().addComponents(
-                new ButtonBuilder().setCustomId('show_top').setLabel('Top Ranges').setStyle(ButtonStyle.Secondary)
-            )]
-        });
-        const record = {
-            owner: owner,
-            selectedDays: [...selectedDays],
-            ranges,
-            userAvailability: {},
-            embedTitle,
-            embedDesc,
-            channelId: channelId
-        };
-        dataStore.addMeeting(msg.id, record);
-        await interaction.deferUpdate();
-        sessions.delete(userId);
-        await botLog(`User <@${userId}> created meeting ${msg.id}`);
-        return;
-    }
-
-    // Button to input availability for a day
-    if (interaction.isButton() && interaction.customId.startsWith('avail_')) {
-        const day = interaction.customId.split('_')[1];
-        const msgId = interaction.message.id;
-        const meeting = dataStore.getMeeting(msgId);
-        if (!meeting) {
-            return interaction.reply({ content: 'Meeting not found or data corrupted.', flags: 64 });
-        }
-        const modal = new ModalBuilder().setCustomId(`modal_${msgId}_${day}`).setTitle(`${day}`);
-        modal.addComponents(
-            new ActionRowBuilder().addComponents(
-                new TextInputBuilder().setCustomId('start').setLabel('Start Time (HH:MM)').setStyle(TextInputStyle.Short).setRequired(true)
-            ),
-            new ActionRowBuilder().addComponents(
-                new TextInputBuilder().setCustomId('end').setLabel('End Time (HH:MM)').setStyle(TextInputStyle.Short).setRequired(true)
-            )
-        );
-        return interaction.showModal(modal);
-    }
-
-    // Modal submit for availability
-    if (interaction.isModalSubmit() && interaction.customId.startsWith('modal_')) {
-        const parts = interaction.customId.split('_');
-        const msgId = parts[1];
-        const day = parts.slice(2).join('_');
-        const meeting = dataStore.getMeeting(msgId);
-        if (!meeting) {
-            return interaction.reply({ content: 'Meeting not found or data corrupted.', flags: 64 });
-        }
-        const startRaw = interaction.fields.getTextInputValue('start');
-        const endRaw = interaction.fields.getTextInputValue('end');
-        const regex = /^([01]?[0-9]|2[0-3]):([0-5][0-9])$/;
-        if (!regex.test(startRaw) || !regex.test(endRaw)) {
-            return interaction.reply({ content: 'Invalid time format. Use HH:MM (24h).', flags: 64 });
-        }
-        const start = roundTimeString(startRaw);
-        const end = roundTimeString(endRaw);
-        const s = timeToMinutes(start), e = timeToMinutes(end);
-        if (e <= s) {
-            return interaction.reply({ content: 'End must be after start.', flags: 64 });
-        }
-        await runQueue(msgId, async () => {
-            meeting.userAvailability[userId] = meeting.userAvailability[userId] || {};
-            if (!meeting.userAvailability[userId][day]) {
-                meeting.userAvailability[userId][day] = [];
-            }
-            for (const [us, ue] of meeting.userAvailability[userId][day]) {
-                const usMin = timeToMinutes(us), ueMin = timeToMinutes(ue);
-                if (s < ueMin && e > usMin) {
-                    return interaction.reply({ content: 'That range overlaps with one you already submitted.', flags: 64 });
-                }
-            }
-            meeting.userAvailability[userId][day].push([start, end]);
-            dataStore.updateMeeting(msgId, meeting);
-            await interaction.deferUpdate();
-
-            const buf = await generateAvailabilityHeatmapImage(
-                meeting.selectedDays,
-                meeting.ranges,
-                meeting.userAvailability
-            );
-            const att = new AttachmentBuilder(buf, { name: 'heatmap.png' });
-            const updatedEmbed = EmbedBuilder.from(interaction.message.embeds[0])
-                .setDescription(`Updated: ${new Date().toLocaleString('en-GB', { timeZoneName: 'short' })}`)
-                .setImage('attachment://heatmap.png');
-            await interaction.message.edit({
-                embeds: [updatedEmbed],
-                files: [att]
-            });
-            await botLog(`User <@${userId}> added availability for meeting ${msgId}`);
-        });
-        return;
-    }
-
-    // Show Top 4 populated ranges
-    if (interaction.isButton() && interaction.customId === 'show_top') {
-        return meetingManager.showTopRanges(interaction.message.id, interaction);
-    }
-
-    // /listmeetings command
-    if (interaction.isChatInputCommand() && interaction.commandName === 'listmeetings') {
-        const meetings = dataStore.getAllMeetings();
-        const meetingIds = Object.keys(meetings);
-        if (meetingIds.length === 0) {
-            return interaction.reply({ content: 'No active meetings found.', flags: 64 });
-        }
-        const page = 1;
-        const perPage = 10;
-        const totalPages = Math.ceil(meetingIds.length / perPage);
-        const pageIds = meetingIds.slice(0, perPage);
-        const descLines = pageIds.map((mid, i) => {
-            const rec = meetings[mid];
-            const title = rec.embedTitle || `Meeting (${mid})`;
-            return `**${i + 1}.** ${title} - Owner: <@${rec.owner}>`;
-        });
-        const embed = new EmbedBuilder()
-            .setTitle(`Meetings (Page ${page}/${totalPages})`)
-            .setDescription(descLines.join('\n'))
-            .setColor(0x2ecc71);
-        const select = new StringSelectMenuBuilder()
-            .setCustomId('list_select_1')
-            .setPlaceholder('Select a meeting to repost')
-            .addOptions(pageIds.map(mid => {
-                const rec = meetings[mid];
-                return {
-                    label: rec.embedTitle?.substring(0, 95) || `Meeting ${mid}`,
-                    value: mid
-                };
-            }));
-        const row1 = new ActionRowBuilder().addComponents(select);
-        const rows = [row1];
-        if (totalPages > 1) {
-            const navRow = new ActionRowBuilder().addComponents(
-                new ButtonBuilder().setCustomId('list_next_1').setLabel('Next ➡️').setStyle(ButtonStyle.Secondary)
-            );
-            rows.push(navRow);
-        }
-        return interaction.reply({
-            embeds: [embed],
-            components: rows,
-            flags: 64
-        });
-    }
-
-    // Pagination for /listmeetings
-    if (interaction.isButton() && (interaction.customId.startsWith('list_prev_') || interaction.customId.startsWith('list_next_'))) {
-        const parts = interaction.customId.split('_');
-        const dir = parts[1];
-        const pg = parseInt(parts[2]);
-        const meetings = dataStore.getAllMeetings();
-        const meetingIds = Object.keys(meetings);
-        const perPage = 10;
-        const totalPages = Math.ceil(meetingIds.length / perPage);
-        const page = dir === 'prev' ? pg - 1 : pg + 1;
-        const startIdx = (page - 1) * perPage;
-        const pageIds = meetingIds.slice(startIdx, startIdx + perPage);
-        const descLines = pageIds.map((mid, i) => {
-            const rec = meetings[mid];
-            const title = rec.embedTitle || `Meeting (${mid})`;
-            return `**${startIdx + i + 1}.** ${title} - Owner: <@${rec.owner}>`;
-        });
-        const embed = new EmbedBuilder()
-            .setTitle(`Meetings (Page ${page}/${totalPages})`)
-            .setDescription(descLines.join('\n'))
-            .setColor(0x2ecc71);
-        const select = new StringSelectMenuBuilder()
-            .setCustomId(`list_select_${page}`)
-            .setPlaceholder('Select a meeting to repost')
-            .addOptions(pageIds.map(mid => {
-                const rec = meetings[mid];
-                return {
-                    label: rec.embedTitle?.substring(0, 95) || `Meeting ${mid}`,
-                    value: mid
-                };
-            }));
-        const selectRow = new ActionRowBuilder().addComponents(select);
-        const navRow = new ActionRowBuilder();
-        if (page > 1) {
-            navRow.addComponents(
-                new ButtonBuilder().setCustomId(`list_prev_${page}`).setLabel('⬅️ Previous').setStyle(ButtonStyle.Secondary)
-            );
-        }
-        if (page < totalPages) {
-            navRow.addComponents(
-                new ButtonBuilder().setCustomId(`list_next_${page}`).setLabel('Next ➡️').setStyle(ButtonStyle.Secondary)
-            );
-        }
-        const rows2 = [selectRow];
-        if (navRow.components.length > 0) rows2.push(navRow);
-        return interaction.update({ embeds: [embed], components: rows2 });
-    }
-
-    // Repost a selected meeting
-    if (interaction.isStringSelectMenu() && interaction.customId.startsWith('list_select_')) {
-        const selectedId = interaction.values[0];
-        const record = dataStore.getMeeting(selectedId);
-        if (!record) {
-            return interaction.reply({ content: 'Selected meeting not found.', flags: 64 });
-        }
-        await runQueue(selectedId, async () => {
-            if (!dataStore.getMeeting(selectedId)) {
-                return interaction.reply({ content: 'That meeting was already removed or finalized.', flags: 64 });
-            }
-            try {
-                if (record.channelId) {
-                    const channel = await client.channels.fetch(record.channelId);
-                    const oldMsg = await channel.messages.fetch(selectedId);
-                    await oldMsg.delete();
-                }
-            } catch (err) {
-                console.warn('Failed to delete old meeting message:', err);
-            }
-            const buffer = await generateAvailabilityHeatmapImage(record.selectedDays, record.ranges, record.userAvailability);
-            const attachment = new AttachmentBuilder(buffer, { name: 'heatmap.png' });
-            const embed = new EmbedBuilder()
-                .setTitle(record.embedTitle || 'Weekly Availability')
-                .setDescription(record.embedDesc || `Reposted: ${new Date().toLocaleString('en-GB', { timeZoneName: 'short' })}`)
-                .setImage('attachment://heatmap.png')
-                .setColor(0x2ecc71);
-            const newMsg = await interaction.channel.send({
-                embeds: [embed],
-                files: [attachment],
-                components: [...getAvailabilityButtons(), new ActionRowBuilder().addComponents(
-                    new ButtonBuilder().setCustomId('show_top').setLabel('Top Ranges').setStyle(ButtonStyle.Secondary)
-                )]
-            });
-            record.channelId = interaction.channel.id;
-            dataStore.addMeeting(newMsg.id, record);
-            dataStore.deleteMeeting(selectedId);
-            await interaction.deferUpdate();
-            await botLog(`User <@${userId}> moved meeting ${selectedId} to ${newMsg.id}`);
-        });
-        return;
-    }
-
-    // /finishmeeting command
-    if (interaction.isChatInputCommand() && interaction.commandName === 'finishmeeting') {
-        const userRoles = interaction.member.roles.cache.map(r => r.id);
-        const meetings = Object.entries(dataStore.getAllMeetings()).filter(([_, m]) =>
-            m.owner === userId || userRoles.some(role => MEET_AUTHORIZED_ROLE_IDS.includes(role))
-        );
-        if (meetings.length === 0) {
-            return interaction.reply({ content: 'You have no meetings you can finalize.', flags: 64 });
-        }
-        const page = 1;
-        const perPage = 25;
-        const totalPages = Math.ceil(meetings.length / perPage);
-        const slice = meetings.slice(0, perPage);
-        const options = slice.map(([id, m]) => ({
-            label: m.embedTitle?.substring(0, 95) || `Meeting ${id}`,
-            value: id
-        }));
-        const embed = new EmbedBuilder()
-            .setTitle(`Finalize Meetings (Page ${page}/${totalPages})`)
-            .setDescription(slice.map(([id, m], i) =>
-                `**${i + 1}.** ${m.embedTitle || 'No title'} - Owner: <@${m.owner}>`).join('\n'))
-            .setColor(0xE74C3C);
-        const menu = new StringSelectMenuBuilder()
-            .setCustomId(`finalize_menu_${page}`)
-            .setPlaceholder('Select a meeting to finalize')
-            .addOptions(options);
-        const rows3 = [new ActionRowBuilder().addComponents(menu)];
-        const nav = new ActionRowBuilder();
-        if (totalPages > 1) {
-            nav.addComponents(
-                new ButtonBuilder().setCustomId(`finalize_next_${page}`).setLabel('Next ➡️').setStyle(ButtonStyle.Secondary)
-            );
-            rows3.push(nav);
-        }
-        return interaction.reply({ embeds: [embed], components: rows3, flags: 64 });
-    }
-
-    // Pagination for finalize menu
-    if (interaction.isButton() && (interaction.customId.startsWith('finalize_prev_') || interaction.customId.startsWith('finalize_next_'))) {
-        const parts = interaction.customId.split('_');
-        const dir = parts[1];
-        const pg = parseInt(parts[2]);
-        const userRoles = interaction.member.roles.cache.map(r => r.id);
-        const meetings = Object.entries(dataStore.getAllMeetings()).filter(([_, m]) =>
-            m.owner === userId || userRoles.some(role => MEET_AUTHORIZED_ROLE_IDS.includes(role))
-        );
-        const perPage = 25;
-        const totalPages = Math.ceil(meetings.length / perPage);
-        const page = dir === 'prev' ? pg - 1 : pg + 1;
-        const startIdx = (page - 1) * perPage;
-        const slice = meetings.slice(startIdx, startIdx + perPage);
-        const options2 = slice.map(([id, m]) => ({
-            label: m.embedTitle?.substring(0, 95) || `Meeting ${id}`,
-            value: id
-        }));
-        const embed2 = new EmbedBuilder()
-            .setTitle(`Finalize Meetings (Page ${page}/${totalPages})`)
-            .setDescription(slice.map(([id, m], i) =>
-                `**${startIdx + i + 1}.** ${m.embedTitle || 'No title'} - Owner: <@${m.owner}>`).join('\n'))
-            .setColor(0xE74C3C);
-        const menu2 = new StringSelectMenuBuilder()
-            .setCustomId(`finalize_menu_${page}`)
-            .setPlaceholder('Select a meeting to finalize')
-            .addOptions(options2);
-        const rows4 = [new ActionRowBuilder().addComponents(menu2)];
-        const nav2 = new ActionRowBuilder();
-        if (page > 1) {
-            nav2.addComponents(
-                new ButtonBuilder().setCustomId(`finalize_prev_${page}`).setLabel('⬅️ Prev').setStyle(ButtonStyle.Secondary)
-            );
-        }
-        if (page < totalPages) {
-            nav2.addComponents(
-                new ButtonBuilder().setCustomId(`finalize_next_${page}`).setLabel('Next ➡️').setStyle(ButtonStyle.Secondary)
-            );
-        }
-        if (nav2.components.length) rows4.push(nav2);
-        return interaction.update({ embeds: [embed2], components: rows4 });
-    }
-
-    // Finalize selected meeting
-    if (interaction.isStringSelectMenu() && interaction.customId.startsWith('finalize_menu_')) {
-        const meetingId = interaction.values[0];
-        return meetingManager.finalizeMeeting(meetingId, interaction);
     }
 }
 

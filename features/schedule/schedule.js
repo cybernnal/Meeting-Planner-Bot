@@ -72,7 +72,7 @@ async function handleScheduleCommand(interaction, client) {
                 year = `20${year}`;
             }
         } else {
-            return interaction.reply({ content: '❌ Please enter the date in DD/MM or DD/MM/YY format.', ephemeral: true });
+            return interaction.followUp({ content: '❌ Please enter the date in DD/MM or DD/MM/YY format.', ephemeral: true });
         }
 
         const [hours, minutes] = time.split(':').map(part => parseInt(part, 10));
@@ -100,7 +100,8 @@ async function handleScheduleCommand(interaction, client) {
 
         const row = new ActionRowBuilder().addComponents(...roleButtons, confirmButton);
 
-        const reply = await interaction.reply({ embeds: [embed], components: [row], ephemeral: true, fetchReply: true });
+        await interaction.deferReply({ ephemeral: true });
+        const reply = await interaction.editReply({ embeds: [embed], components: [row], fetchReply: true });
         scheduleState.set(interaction.user.id, { messageId: reply.id, selectedRoles: [], originalMessage: message, timestamp, selectedEmojis: [], day: day, month: month, year: year, time: time });
         
 
@@ -232,9 +233,7 @@ async function handleScheduleCommand(interaction, client) {
             const rolePings = selectedRoles.map(r => `<@&${r}>`).join(' ');
             const emojiList = selectedEmojis.map(e => { 
                 const foundEmoji = emojis.find(em => em.name === e); 
-                const reactors = dataStore.getReactions(sentMessage.id)[foundEmoji.emoji] || [];
-                const reactorMentions = reactors.map(id => `<@${id}>`).join(', ');
-                return foundEmoji ? `${foundEmoji.name} ${foundEmoji.emoji} (${reactorMentions})` : ''; 
+                return foundEmoji ? `${foundEmoji.name} ${foundEmoji.emoji}` : ''; 
             }).join('\n');
 
             const publicEmbed = new EmbedBuilder()
