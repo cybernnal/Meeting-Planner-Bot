@@ -84,66 +84,7 @@ initLogger(client);
 client.once(Events.ClientReady, async () => {
     botLog("Oreo has awakened. The judgment shall now commence.");
 
-    // Temporary test for generateAvailabilityHeatmapImage
-    const testDays = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-    const testRanges = [
-        { start: "09:00", end: "12:00" },
-        { start: "13:00", end: "17:00" },
-        { start: "18:00", end: "20:00" }
-    ];
-    const testAvailability = {};
-    const userIds = Array.from({ length: 12 }, (_, i) => `123456789012345678${i}`); // Simulate Discord user IDs
-    const testNicknames = {};
-    userIds.forEach((id, i) => {
-        testNicknames[id] = `TestUser${i + 1}`;
-    });
-
-    // Populate testAvailability with dummy user IDs
-    for (const userId of userIds) {
-        testAvailability[userId] = {};
-        for (const day of testDays) {
-            testAvailability[userId][day] = [];
-            for (const range of testRanges) {
-                // Randomly assign availability
-                if (Math.random() < 0.7) { // Higher chance of being available for testing
-                    testAvailability[userId][day].push([range.start, range.end]);
-                }
-            }
-        }
-    }
-
-    // Ensure at least one range has all users available for testing purposes
-    const allAvailableDay = testDays[0];
-    const allAvailableRange = testRanges[0];
-    for (const userId of userIds) {
-        testAvailability[userId][allAvailableDay] = testAvailability[userId][allAvailableDay] || [];
-        if (!testAvailability[userId][allAvailableDay].some(r => r[0] === allAvailableRange.start && r[1] === allAvailableRange.end)) {
-            testAvailability[userId][allAvailableDay].push([allAvailableRange.start, allAvailableRange.end]);
-        }
-    }
-
-    try {
-        const buffer = await generateAvailabilityHeatmapImage(testDays, testRanges, testAvailability, testNicknames);
-        const attachment = new AttachmentBuilder(buffer, { name: 'test_heatmap.png' });
-        const embed = new EmbedBuilder()
-            .setTitle('Test Heatmap')
-            .setDescription('This is a test heatmap generated on bot startup.')
-            .setImage('attachment://test_heatmap.png')
-            .setColor(0x3498db);
-
-        // IMPORTANT: Replace 'YOUR_TEST_CHANNEL_ID' with an actual channel ID where you want to see the test image
-        const testChannelId = '1381059798606545021';
-        const testChannel = client.channels.cache.get(testChannelId);
-        if (testChannel) {
-            await testChannel.send({ embeds: [embed], files: [attachment] });
-            botLog(`Test heatmap sent to channel ${testChannelId}`);
-        } else {
-            botLog(`Could not find test channel with ID ${testChannelId}. Please update index.js with a valid channel ID.`);
-        }
-    } catch (error) {
-        console.error("Error generating or sending test heatmap:", error);
-        botLog(`Error generating or sending test heatmap: ${error.message}`);
-    }
+    
 });
 
 
