@@ -139,14 +139,4 @@ async function generateAvailabilityHeatmapImage(days, ranges, availability, guil
     return canvas.toBuffer("image/png");
 }
 
-module.exports = {
-    getDayButtons,
-    getControlRow,
-    getConfirmDaysRow,
-    getFinalConfirmRow,
-    getAvailabilityButtons,
-    timeToMinutes,
-    minutesToTime,
-    roundTimeString,
-    generateAvailabilityHeatmapImage
-};
+function createDaySelectionEmbed(selectedDays, showConfirm) {    const embed = new EmbedBuilder()        .setTitle("Select Days for Meeting")        .setDescription("Toggle days you want to include in the meeting availability.")        .setColor(0x0099ff);    return embed;}function createTimeRangeEmbed(selectedDays, ranges) {    const embed = new EmbedBuilder()        .setTitle("Add Time Ranges")        .setDescription("Add time ranges for the selected days.")        .setColor(0x0099ff);    if (ranges.length > 0) {        let description = "Current Ranges:\n";        ranges.forEach(range => {            description += `- ${range.start} - ${range.end}\n`;        });        embed.setDescription(description);    }    return embed;}module.exports = {    getDayButtons,    getControlRow,    getConfirmDaysRow,    getFinalConfirmRow,    getAvailabilityButtons,    timeToMinutes,    minutesToTime,    roundTimeString,    generateAvailabilityHeatmapImage,    createDaySelectionEmbed,    createTimeRangeEmbed};
