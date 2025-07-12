@@ -1,6 +1,6 @@
 const { drawCheckmark, drawCross } = require("./drawingUtils");
 
-async function drawUserList(ctx, userIds, startX, startY, maxWidth, lineHeight, iconSize, drawIcon, iconColor, guild) {
+async function drawUserList(ctx, userIds, startX, startY, maxWidth, lineHeight, iconSize, drawIcon, iconColor, guild, dryRun = false) {
     ctx.textAlign = "left"; // Ensure left alignment for user names
     let currentX = startX;
     let currentY = startY;
@@ -8,12 +8,14 @@ async function drawUserList(ctx, userIds, startX, startY, maxWidth, lineHeight, 
 
     for (const userId of userIds) {
         let displayName = userId; // Fallback to ID
-        if (guild && guild.members && typeof guild.members.fetch === 'function') {
-            try {
-                const member = await guild.members.fetch(userId);
-                displayName = member.displayName || member.user.username;
-            } catch (error) {
-                console.error(`Could not fetch member for ID ${userId}:`, error);
+        if (!dryRun) {
+            if (guild && guild.members && typeof guild.members.fetch === 'function') {
+                try {
+                    const member = await guild.members.fetch(userId);
+                    displayName = member.displayName || member.user.username;
+                } catch (error) {
+                    console.error(`Could not fetch member for ID ${userId}:`, error);
+                }
             }
         }
         
@@ -30,8 +32,10 @@ async function drawUserList(ctx, userIds, startX, startY, maxWidth, lineHeight, 
             rowWidth = 0;
         }
 
-        drawIcon(ctx, currentX + iconSize / 2, currentY - iconSize / 4, iconSize, iconColor);
-        ctx.fillText(userTag, currentX + iconSize + 2, currentY);
+        if (!dryRun) {
+            drawIcon(ctx, currentX + iconSize / 2, currentY - iconSize / 4, iconSize, iconColor);
+            ctx.fillText(userTag, currentX + iconSize + 2, currentY);
+        }
         currentX += elementWidth;
         rowWidth += elementWidth;
     }

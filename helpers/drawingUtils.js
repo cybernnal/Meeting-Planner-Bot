@@ -140,22 +140,13 @@ async function drawTopRanges(ctx, days, ranges, availability, guild, dimensions,
     const { scale, width, height, padding, heatmapWidth, topRangesSectionWidth, fontSizeIncrease } = dimensions;
     const topRangesX = (heatmapWidth + (width - heatmapWidth - topRangesSectionWidth) / 2) / scale;
     const topRangesY = padding / scale;
-    const topRangesSectionHeight = (height - padding * 2) / scale;
+    let topRangesSectionHeight;
 
     const titleFontSize = 16 + fontSizeIncrease;
     const rangeTitleFontSize = 14 + fontSizeIncrease;
     const userListFontSize = 13 + fontSizeIncrease;
     const userListLineHeight = 17 + fontSizeIncrease;
     const userListIconSize = 8 + fontSizeIncrease;
-
-    ctx.font = `bold ${titleFontSize}px sans-serif`;
-    ctx.textAlign = "center";
-    ctx.fillStyle = "#FFFFFF";
-    ctx.fillText("Top 4 Time Ranges", topRangesX + (topRangesSectionWidth / scale) / 2, (padding / scale) / 2);
-
-    ctx.strokeStyle = "#000";
-    ctx.lineWidth = 4 / scale;
-    ctx.strokeRect(topRangesX, topRangesY, (topRangesSectionWidth / scale), topRangesSectionHeight);
 
     const results = [];
     for (const day of days) {
@@ -186,8 +177,42 @@ async function drawTopRanges(ctx, days, ranges, availability, guild, dimensions,
         }
     }
 
-    results.sort((a, b) => b.avail.length - a.avail.length);
     const top = results.filter(res => res.avail.length > 0).slice(0, 4);
+
+    let currentYForCalculation = topRangesY + (40 / scale); // Start after the title
+
+    if (top.length === 0) {
+        currentYForCalculation += userListLineHeight; // For "No responses yet."
+    } else {
+        const rangeEntryPadding = 10 / scale;
+
+        for (const res of top) {
+            ctx.font = `bold ${rangeTitleFontSize}px sans-serif`; // Set font for dry run
+            currentYForCalculation += userListLineHeight; // For range title
+            currentYForCalculation += userListLineHeight; // For "Available:"
+            currentYForCalculation = await drawUserList(ctx, res.avail, topRangesX + (20 / scale), currentYForCalculation, (topRangesSectionWidth - 25) / scale, userListLineHeight, userListIconSize, drawCheckmark, "#00FF00", guild, true);
+
+            currentYForCalculation += userListLineHeight; // For "Not Available:"
+            currentYForCalculation = await drawUserList(ctx, res.notAvail, topRangesX + (20 / scale), currentYForCalculation, (topRangesSectionWidth - 25) / scale, userListLineHeight, userListIconSize, drawCross, "#FF0000", guild, true);
+
+            if (res !== top[top.length - 1]) {
+                currentYForCalculation += rangeEntryPadding;
+            }
+        }
+    }
+
+    topRangesSectionHeight = Math.max(150 / scale, currentYForCalculation - topRangesY + (padding / scale)); // Minimum 150px, plus padding
+
+    ctx.strokeStyle = "#000";
+    ctx.lineWidth = 4 / scale;
+    ctx.fillStyle = "#36393F"; // Slightly lighter background
+    ctx.fillRect(topRangesX, topRangesY, (topRangesSectionWidth / scale), topRangesSectionHeight);
+    ctx.strokeRect(topRangesX, topRangesY, (topRangesSectionWidth / scale), topRangesSectionHeight);
+
+    ctx.font = `bold ${titleFontSize}px sans-serif`;
+    ctx.textAlign = "center";
+    ctx.fillStyle = "#FFFFFF";
+    ctx.fillText("Top 4 Time Ranges", topRangesX + (topRangesSectionWidth / scale) / 2, (padding / scale) / 2);
 
     let currentY = topRangesY + (40 / scale);
     const userListStartX = topRangesX + (20 / scale);

@@ -157,6 +157,7 @@ async function handleAddModalSubmit(interaction) {
 }
 
 async function handleFinalModalSubmit(interaction, client) {
+    await interaction.deferUpdate();
     const userId = interaction.user.id;
     const session = sessions.get(userId);
     if (!session) return;
@@ -190,9 +191,7 @@ async function handleFinalModalSubmit(interaction, client) {
         channelId: channelId
     };
     dataStore.addMeeting(msg.id, record);
-    await interaction.deferUpdate();
     sessions.delete(userId);
-    await botLog(`User <@${userId}> created meeting ${msg.id}`);
 }
 
 async function handleAvailabilityButton(interaction) {
