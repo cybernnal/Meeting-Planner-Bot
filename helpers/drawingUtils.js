@@ -187,7 +187,7 @@ async function drawTopRanges(ctx, days, ranges, availability, guild, dimensions,
     }
 
     results.sort((a, b) => b.avail.length - a.avail.length);
-    const top = results.slice(0, 4);
+    const top = results.filter(res => res.avail.length > 0).slice(0, 4);
 
     let currentY = topRangesY + (40 / scale);
     const userListStartX = topRangesX + (20 / scale);
