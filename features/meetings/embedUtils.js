@@ -96,12 +96,12 @@ function roundTimeString(timeString) {
 
 async function generateAvailabilityHeatmapImage(days, ranges, availability, guild) {
     const scale = 2;
-    const cellHeight = 20 * scale;
     const cellWidth = 100 * scale;
     const labelWidth = 60 * scale;
     const padding = 30 * scale;
     const rightPad = 30 * scale;
     const MAX_CANVAS_WIDTH = 1200 * scale;
+    const baseHeatmapHeight = 400 * scale; // Base height for the heatmap section
 
     if (!days.length || !ranges.length) {
         return Canvas.createCanvas(100 * scale, 100 * scale).toBuffer("image/png");
@@ -126,11 +126,12 @@ async function generateAvailabilityHeatmapImage(days, ranges, availability, guil
             slots.push({ gap: true });
         }
     });
+    const cellHeight = 20 * scale;
 
     const heatmapWidth = labelWidth + cellWidth * days.length;
     const topRangesSectionWidth = 250 * scale;
     const width = heatmapWidth + padding + topRangesSectionWidth + rightPad;
-    const height = padding + slots.length * cellHeight + padding;
+    const height = padding + baseHeatmapHeight + padding;
 
     const canvas = Canvas.createCanvas(width, height);
     const ctx = canvas.getContext("2d");
