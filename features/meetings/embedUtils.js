@@ -1,4 +1,4 @@
-const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require("discord.js");
+const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require("discord.js");
 const Canvas = require("canvas");
 const { drawHeatmap, drawTopRanges } = require("../../helpers/drawingUtils");
 const { drawUserList, formatUserId } = require("../../helpers/drawingHelpers");
