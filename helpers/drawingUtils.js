@@ -56,7 +56,7 @@ function drawHeatmap(ctx, days, slots, availability, dimensions, minutesToTime, 
             ctx.font = `${isWholeHour ? "bold " : ""}${14 + fontSizeIncrease}px sans-serif`;
             ctx.textAlign = "right";
             ctx.fillStyle = "#FFFFFF";
-            ctx.fillText(minutesToTime(time), (labelWidth - 6) / scale, y + (cellHeight / scale) / 2 - (10 / scale));
+            ctx.fillText(minutesToTime(time), (labelWidth - 6) / scale, y + (cellHeight / scale) / 2 - (20 / scale));
         }
 
         days.forEach((day, j) => {
