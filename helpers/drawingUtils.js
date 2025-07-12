@@ -28,7 +28,7 @@ function drawCross(ctx, x, y, size, color) {
 }
 
 function drawHeatmap(ctx, days, slots, availability, dimensions, minutesToTime, timeToMinutes) {
-    const { scale, cellHeight, cellWidth, labelWidth, padding } = dimensions;
+    const { scale, cellHeight, cellWidth, labelWidth, padding, fontSizeIncrease } = dimensions;
     const colors = ["#ffffff", "#ebf5e6", "#d6ebcc", "#c2e0b3",
         "#add699", "#99cc80", "#85c266", "#70b84d",
         "#5cad33", "#47a31a", "#339900"];
@@ -53,7 +53,7 @@ function drawHeatmap(ctx, days, slots, availability, dimensions, minutesToTime, 
         const isHalfHour = time % 30 === 0;
 
         if (i === 0 || isHalfHour || slot.start) {
-            ctx.font = (isWholeHour ? "bold 14px sans-serif" : "13px sans-serif");
+            ctx.font = `${isWholeHour ? "bold " : ""}${14 + fontSizeIncrease}px sans-serif`;
             ctx.textAlign = "right";
             ctx.fillStyle = "#FFFFFF";
             ctx.fillText(minutesToTime(time), (labelWidth - 6) / scale, y + (cellHeight / scale) / 2 - (10 / scale));
@@ -101,9 +101,9 @@ function drawHeatmap(ctx, days, slots, availability, dimensions, minutesToTime, 
             ctx.textAlign = "right";
             ctx.fillStyle = "#FFFFFF";
             const endTime = time + 15;
-            ctx.font = (endTime % 60 === 0 ? "bold 14px sans-serif" : "13px sans-serif");
+            ctx.font = `${endTime % 60 === 0 ? "bold " : ""}${14 + fontSizeIncrease}px sans-serif`;
             ctx.fillText(minutesToTime(endTime), (labelWidth - 6) / scale, sy - (5 / scale) - (10 / scale) + (14 / scale));
-            ctx.font = "13px sans-serif";
+            ctx.font = `${13 + fontSizeIncrease}px sans-serif`;
         }
     });
 
@@ -129,7 +129,7 @@ function drawHeatmap(ctx, days, slots, availability, dimensions, minutesToTime, 
 
     ctx.textAlign = "center";
     ctx.fillStyle = "#FFFFFF";
-    ctx.font = "bold 14px sans-serif";
+    ctx.font = `bold ${14 + fontSizeIncrease}px sans-serif`;
     days.forEach((day, j) => {
         const x = (labelWidth / scale) + j * (cellWidth / scale) + (cellWidth / scale) / 2;
         ctx.fillText(day, x, (padding / scale) / 2 + (4 / scale));
@@ -137,16 +137,16 @@ function drawHeatmap(ctx, days, slots, availability, dimensions, minutesToTime, 
 }
 
 async function drawTopRanges(ctx, days, ranges, availability, guild, dimensions, timeToMinutes, drawUserList, formatUserId) {
-    const { scale, width, height, padding, heatmapWidth, topRangesSectionWidth } = dimensions;
+    const { scale, width, height, padding, heatmapWidth, topRangesSectionWidth, fontSizeIncrease } = dimensions;
     const topRangesX = (heatmapWidth + (width - heatmapWidth - topRangesSectionWidth) / 2) / scale;
     const topRangesY = padding / scale;
     const topRangesSectionHeight = (height - padding * 2) / scale;
 
-    const titleFontSize = 16;
-    const rangeTitleFontSize = 14;
-    const userListFontSize = 13;
-    const userListLineHeight = 17;
-    const userListIconSize = 8;
+    const titleFontSize = 16 + fontSizeIncrease;
+    const rangeTitleFontSize = 14 + fontSizeIncrease;
+    const userListFontSize = 13 + fontSizeIncrease;
+    const userListLineHeight = 17 + fontSizeIncrease;
+    const userListIconSize = 8 + fontSizeIncrease;
 
     ctx.font = `bold ${titleFontSize}px sans-serif`;
     ctx.textAlign = "center";

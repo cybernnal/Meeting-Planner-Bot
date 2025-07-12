@@ -107,6 +107,15 @@ async function generateAvailabilityHeatmapImage(days, ranges, availability, guil
         return Canvas.createCanvas(100 * scale, 100 * scale).toBuffer("image/png");
     }
 
+    let totalMinutes = 0;
+    ranges.forEach(({ start, end }) => {
+        const s = timeToMinutes(start);
+        const e = timeToMinutes(end);
+        totalMinutes += (e - s);
+    });
+    const totalHours = totalMinutes / 60;
+    const fontSizeIncrease = totalHours > 16 ? 3 : 0;
+
     const slots = [];
     ranges.forEach(({ start, end }, idx) => {
         const s = timeToMinutes(start), e = timeToMinutes(end);
@@ -132,7 +141,7 @@ async function generateAvailabilityHeatmapImage(days, ranges, availability, guil
     ctx.font = "14px sans-serif";
     ctx.textBaseline = "middle";
 
-    const dimensions = { scale, cellHeight, cellWidth, labelWidth, padding, height, width, heatmapWidth, topRangesSectionWidth };
+    const dimensions = { scale, cellHeight, cellWidth, labelWidth, padding, height, width, heatmapWidth, topRangesSectionWidth, fontSizeIncrease };
     drawHeatmap(ctx, days, slots, availability, dimensions, minutesToTime, timeToMinutes);
     await drawTopRanges(ctx, days, ranges, availability, guild, dimensions, timeToMinutes, drawUserList, formatUserId);
 
