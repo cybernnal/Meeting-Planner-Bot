@@ -110,7 +110,6 @@ client.on(Events.InteractionCreate, async interaction => {
     }
 
     if (!handler) {
-        
         return;
     }
 
