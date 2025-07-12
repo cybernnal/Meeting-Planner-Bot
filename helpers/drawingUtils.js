@@ -205,7 +205,7 @@ async function drawTopRanges(ctx, days, ranges, availability, guild, dimensions,
 
     ctx.strokeStyle = "#000";
     ctx.lineWidth = 4 / scale;
-    ctx.fillStyle = "#36393F"; // Slightly lighter background
+    ctx.fillStyle = "#505357"; // Even lighter background
     ctx.fillRect(topRangesX, topRangesY, (topRangesSectionWidth / scale), topRangesSectionHeight);
     ctx.strokeRect(topRangesX, topRangesY, (topRangesSectionWidth / scale), topRangesSectionHeight);
 
