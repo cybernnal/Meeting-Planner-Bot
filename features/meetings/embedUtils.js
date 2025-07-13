@@ -1,4 +1,4 @@
-const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require("discord.js");
+const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, StringSelectMenuBuilder } = require("discord.js");
 const Canvas = require("canvas");
 const { drawHeatmap, drawTopRanges } = require("../../helpers/drawingUtils");
 const { drawUserList, formatUserId } = require("../../helpers/drawingHelpers");
@@ -69,6 +69,15 @@ function getAvailabilityButtons(selectedDays) {
     if (buttonCount > 0) {
         rows.push(currentRow);
     }
+
+    const removeButtonRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId("remove_availability")
+            .setLabel("Remove Availability")
+            .setStyle(ButtonStyle.Danger)
+    );
+    rows.push(removeButtonRow);
+
     return rows;
 }
 
@@ -148,4 +157,92 @@ async function generateAvailabilityHeatmapImage(days, ranges, availability, guil
     return canvas.toBuffer("image/png");
 }
 
-function createDaySelectionEmbed(selectedDays, showConfirm) {    const embed = new EmbedBuilder()        .setTitle("Select Days for Meeting")        .setDescription("Toggle days you want to include in the meeting availability.")        .setColor(0x0099ff);    return embed;}function createTimeRangeEmbed(selectedDays, ranges) {    const embed = new EmbedBuilder()        .setTitle("Add Time Ranges")        .setDescription("Add time ranges for the selected days.")        .setColor(0x0099ff);    if (ranges.length > 0) {        let description = "Current Ranges:\n";        ranges.forEach(range => {            description += `- ${range.start} - ${range.end}\n`;        });        embed.setDescription(description);    }    return embed;}module.exports = {    getDayButtons,    getControlRow,    getConfirmDaysRow,    getFinalConfirmRow,    getAvailabilityButtons,    timeToMinutes,    minutesToTime,    roundTimeString,    generateAvailabilityHeatmapImage,    createDaySelectionEmbed,    createTimeRangeEmbed};
+function createDaySelectionEmbed(selectedDays, showConfirm) {    const embed = new EmbedBuilder()        .setTitle("Select Days for Meeting")        .setDescription("Toggle days you want to include in the meeting availability.")        .setColor(0x0099ff);    return embed;}function createTimeRangeEmbed(selectedDays, ranges) {    const embed = new EmbedBuilder()        .setTitle("Add Time Ranges")        .setDescription("Add time ranges for the selected days.")        .setColor(0x0099ff);    if (ranges.length > 0) {        let description = "Current Ranges:\n";        ranges.forEach(range => {            description += `- ${range.start} - ${range.end}\n`;        });        embed.setDescription(description);    }    return embed;}
+
+function createRemoveAvailabilityView(userAvailability, page, pageSize, selectedIndex = -1, selectedRangeText = null) {
+    const allRanges = [];
+    for (const day in userAvailability) {
+        userAvailability[day].forEach(range => {
+            allRanges.push({ day, range });
+        });
+    }
+
+    const totalPages = Math.ceil(allRanges.length / pageSize) || 1;
+    const startIndex = (page - 1) * pageSize;
+    const pageRanges = allRanges.slice(startIndex, startIndex + pageSize);
+
+    const embed = new EmbedBuilder()
+        .setTitle("Remove Your Availability")
+        .setDescription("Select a time range to remove from your availability.")
+        .setColor(0xff0000)
+        .setFooter({ text: `Page ${page} of ${totalPages}` });
+
+    let description = "";
+    if (allRanges.length === 0) {
+        description = "You have no availability to remove.";
+    } else {
+        pageRanges.forEach((item, index) => {
+            description += `${startIndex + index + 1}. ${item.day}: ${item.range[0]} - ${item.range[1]}
+`;
+        });
+    }
+    embed.setDescription(description);
+
+    const components = [];
+
+    if (pageRanges.length > 0) {
+        const selectMenu = new StringSelectMenuBuilder()
+            .setCustomId(`remove_avail_select_${page}`)
+            .setPlaceholder(selectedRangeText || "Select a range to remove");
+
+        pageRanges.forEach((item, index) => {
+            selectMenu.addOptions({ 
+                label: `${item.day}: ${item.range[0]} - ${item.range[1]} `,
+                value: `${startIndex + index}`
+            });
+        });
+        components.push(new ActionRowBuilder().addComponents(selectMenu));
+    }
+
+    const buttonRow = new ActionRowBuilder();
+    buttonRow.addComponents(
+        new ButtonBuilder()
+            .setCustomId(`remove_avail_prev_${page}`)
+            .setLabel("Previous")
+            .setStyle(ButtonStyle.Primary)
+            .setDisabled(page === 1),
+        new ButtonBuilder()
+            .setCustomId(`remove_avail_next_${page}`)
+            .setLabel("Next")
+            .setStyle(ButtonStyle.Primary)
+            .setDisabled(page >= totalPages),
+        new ButtonBuilder()
+            .setCustomId(`remove_avail_delete_${selectedIndex}`)
+            .setLabel("Delete")
+            .setStyle(ButtonStyle.Danger)
+            .setDisabled(selectedIndex === -1),
+        new ButtonBuilder()
+            .setCustomId("remove_avail_done")
+            .setLabel("Done")
+            .setStyle(ButtonStyle.Secondary)
+    );
+
+    components.push(buttonRow);
+
+    return { embed, components };
+}
+
+module.exports = {
+    getDayButtons,
+    getControlRow,
+    getConfirmDaysRow,
+    getFinalConfirmRow,
+    getAvailabilityButtons,
+    timeToMinutes,
+    minutesToTime,
+    roundTimeString,
+    generateAvailabilityHeatmapImage,
+    createDaySelectionEmbed,
+    createTimeRangeEmbed,
+    createRemoveAvailabilityView
+};

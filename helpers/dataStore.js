@@ -21,7 +21,13 @@ function loadData() {
     if (fs.existsSync(DATA_FILE)) {
         try {
             const fileContent = fs.readFileSync(DATA_FILE, "utf8");
-            data = JSON.parse(fileContent);
+            if (fileContent) {
+                data = JSON.parse(fileContent);
+            } else {
+                // File is empty, initialize with default data and save.
+                data = { meetings: {}, spinWinners: {}, scheduledEvents: [] };
+                saveData();
+            }
             if (!data.meetings) data.meetings = {};
             if (!data.spinWinners) data.spinWinners = {};
             if (!data.scheduledEvents) data.scheduledEvents = [];
@@ -30,6 +36,8 @@ function loadData() {
             data = { meetings: {}, spinWinners: {}, scheduledEvents: [] };
         }
     } else {
+        // File doesn't exist, create it with default data.
+        saveData();
     }
 }
 

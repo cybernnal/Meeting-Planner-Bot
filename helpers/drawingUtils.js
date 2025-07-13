@@ -137,10 +137,8 @@ function drawHeatmap(ctx, days, slots, availability, dimensions, minutesToTime, 
 }
 
 async function drawTopRanges(ctx, days, ranges, availability, guild, dimensions, timeToMinutes, drawUserList, formatUserId) {
-    const { scale, width, height, padding, heatmapWidth, topRangesSectionWidth, fontSizeIncrease } = dimensions;
-    const topRangesX = (heatmapWidth + (width - heatmapWidth - topRangesSectionWidth) / 2) / scale;
-    const topRangesY = padding / scale;
-    let topRangesSectionHeight;
+    const { scale, width, padding, heatmapWidth, fontSizeIncrease } = dimensions;
+    let { topRangesSectionWidth } = dimensions;
 
     const titleFontSize = 16 + fontSizeIncrease;
     const rangeTitleFontSize = 14 + fontSizeIncrease;
@@ -152,26 +150,17 @@ async function drawTopRanges(ctx, days, ranges, availability, guild, dimensions,
     for (const day of days) {
         for (const range of ranges) {
             const rs = timeToMinutes(range.start), re = timeToMinutes(range.end);
-            const availList = [];
-            const notList = [];
+            const availList = [], notList = [];
             const allUserIds = new Set(Object.keys(availability || {}));
 
             for (const uid of allUserIds) {
                 const userDays = availability[uid];
-                if (userDays && userDays[day]) {
-                    const overlaps = userDays[day].some(([us, ue]) => {
-                        const usMin = timeToMinutes(us);
-                        const ueMin = timeToMinutes(ue);
-                        return !(ueMin <= rs || usMin >= re);
-                    });
-                    if (overlaps) {
-                        availList.push(uid);
-                    } else {
-                        notList.push(uid);
-                    }
-                } else {
-                    notList.push(uid);
-                }
+                const overlaps = userDays && userDays[day] && userDays[day].some(([us, ue]) => {
+                    const usMin = timeToMinutes(us), ueMin = timeToMinutes(ue);
+                    return !(ueMin <= rs || usMin >= re);
+                });
+                if (overlaps) availList.push(uid);
+                else notList.push(uid);
             }
             results.push({ day, start: range.start, end: range.end, avail: availList, notAvail: notList });
         }
@@ -179,35 +168,44 @@ async function drawTopRanges(ctx, days, ranges, availability, guild, dimensions,
 
     const top = results.filter(res => res.avail.length > 0).slice(0, 4);
 
-    let currentYForCalculation = topRangesY + (40 / scale); // Start after the title
+    let maxTextWidth = 0;
+    if (top.length > 0) {
+        ctx.font = `bold ${rangeTitleFontSize}px sans-serif`;
+        top.forEach(res => {
+            const totalUsers = Object.keys(availability || {}).length;
+            const text = `${res.day} ${res.start}–${res.end} (${res.avail.length}/${totalUsers})`;
+            maxTextWidth = Math.max(maxTextWidth, ctx.measureText(text).width);
+        });
+    }
 
+    const horizontalPadding = 40; 
+    const minWidth = 250; 
+    topRangesSectionWidth = Math.max(minWidth, topRangesSectionWidth, maxTextWidth + horizontalPadding);
+
+    const topRangesX = (heatmapWidth + (width - heatmapWidth - topRangesSectionWidth) / 2) / scale;
+    const topRangesY = padding / scale;
+
+    let currentYForCalculation = topRangesY + (40 / scale);
     if (top.length === 0) {
-        currentYForCalculation += userListLineHeight; // For "No responses yet."
+        currentYForCalculation += userListLineHeight;
     } else {
         const rangeEntryPadding = 10 / scale;
-
         for (const res of top) {
-            ctx.font = `bold ${rangeTitleFontSize}px sans-serif`; // Set font for dry run
-            currentYForCalculation += userListLineHeight; // For range title
-            currentYForCalculation += userListLineHeight; // For "Available:"
-            currentYForCalculation = await drawUserList(ctx, res.avail, topRangesX + (20 / scale), currentYForCalculation, (topRangesSectionWidth - 25) / scale, userListLineHeight, userListIconSize, drawCheckmark, "#00FF00", guild, true);
-
-            currentYForCalculation += userListLineHeight; // For "Not Available:"
-            currentYForCalculation = await drawUserList(ctx, res.notAvail, topRangesX + (20 / scale), currentYForCalculation, (topRangesSectionWidth - 25) / scale, userListLineHeight, userListIconSize, drawCross, "#FF0000", guild, true);
-
-            if (res !== top[top.length - 1]) {
-                currentYForCalculation += rangeEntryPadding;
-            }
+            currentYForCalculation += userListLineHeight * 2; 
+            currentYForCalculation = await drawUserList(ctx, res.avail, 0, currentYForCalculation, 0, userListLineHeight, 0, null, null, guild, true);
+            currentYForCalculation += userListLineHeight; 
+            currentYForCalculation = await drawUserList(ctx, res.notAvail, 0, currentYForCalculation, 0, userListLineHeight, 0, null, null, guild, true);
+            if (res !== top[top.length - 1]) currentYForCalculation += rangeEntryPadding;
         }
     }
 
-    topRangesSectionHeight = Math.max(150 / scale, currentYForCalculation - topRangesY + (padding / scale)); // Minimum 150px, plus padding
+    const topRangesSectionHeight = Math.max(150 / scale, currentYForCalculation - topRangesY + (padding / scale));
 
     ctx.strokeStyle = "#000";
     ctx.lineWidth = 4 / scale;
-    ctx.fillStyle = "#505357"; // Even lighter background
-    ctx.fillRect(topRangesX, topRangesY, (topRangesSectionWidth / scale), topRangesSectionHeight);
-    ctx.strokeRect(topRangesX, topRangesY, (topRangesSectionWidth / scale), topRangesSectionHeight);
+    ctx.fillStyle = "#505357";
+    ctx.fillRect(topRangesX, topRangesY, topRangesSectionWidth / scale, topRangesSectionHeight);
+    ctx.strokeRect(topRangesX, topRangesY, topRangesSectionWidth / scale, topRangesSectionHeight);
 
     ctx.font = `bold ${titleFontSize}px sans-serif`;
     ctx.textAlign = "center";
@@ -216,7 +214,7 @@ async function drawTopRanges(ctx, days, ranges, availability, guild, dimensions,
 
     let currentY = topRangesY + (40 / scale);
     const userListStartX = topRangesX + (20 / scale);
-    const userListMaxWidth = (topRangesSectionWidth - 25) / scale;
+    const userListMaxWidth = (topRangesSectionWidth - 40) / scale;
 
     ctx.textAlign = "left";
 
@@ -226,7 +224,6 @@ async function drawTopRanges(ctx, days, ranges, availability, guild, dimensions,
         ctx.fillText("No responses yet.", userListStartX, currentY);
     } else {
         const rangeEntryPadding = 10 / scale;
-
         for (const res of top) {
             ctx.font = `bold ${rangeTitleFontSize}px sans-serif`;
             ctx.fillStyle = "#FFFFFF";

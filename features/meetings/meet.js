@@ -28,12 +28,14 @@ const {
     timeToMinutes,
     roundTimeString,
     createDaySelectionEmbed,
-    createTimeRangeEmbed
+    createTimeRangeEmbed,
+    createRemoveAvailabilityView
 } = require("./embedUtils");
 
 const { getMeeting, createMeeting, endMeeting, clearMeetings, setMeetingInterval, getMeetingByChannel, isValidTimeFormat, hasTimeRangeOverlap } = require("../../helpers/meetingHelpers");
 
 const sessions = new Map();
+const availabilitySessions = new Map();
 
 async function handleMeetCommand(interaction) {
     const userId = interaction.user.id;
@@ -267,7 +269,7 @@ async function handleAvailabilityModalSubmit(interaction) {
             embeds: [updatedEmbed],
             files: [att]
         });
-        await botLog(`User <@${userId}> added availability for meeting ${msgId}`);
+        await botLog(`User <@${userId}> added availability for meeting `, interaction.channelId ,msgId);
     });
 }
 
@@ -395,6 +397,139 @@ async function handleFinishMeetingSelect(interaction) {
     return meetingManager.finalizeMeeting(meetingId, interaction);
 }
 
+async function handleRemoveAvailabilityButton(interaction) {
+    const userId = interaction.user.id;
+    const msgId = interaction.message.id;
+    const meeting = dataStore.getMeeting(msgId);
+
+    if (!meeting || !meeting.userAvailability[userId]) {
+        return interaction.reply({ content: "You have no availability to remove.", ephemeral: true });
+    }
+
+    availabilitySessions.set(userId, {
+        page: 1,
+        pageSize: 10,
+        selectedIndex: -1,
+        meetingId: msgId
+    });
+
+    const { embed, components } = createRemoveAvailabilityView(meeting.userAvailability[userId], 1, 10);
+    await interaction.reply({ embeds: [embed], components, ephemeral: true });
+}
+
+async function handleRemoveAvailabilitySelect(interaction) {
+    const userId = interaction.user.id;
+    const session = availabilitySessions.get(userId);
+    if (!session) return;
+
+    const selectedIndex = parseInt(interaction.values[0]);
+    session.selectedIndex = selectedIndex;
+
+    const meeting = dataStore.getMeeting(session.meetingId);
+    if (!meeting) return;
+
+    const allRanges = [];
+    for (const day in meeting.userAvailability[userId]) {
+        meeting.userAvailability[userId][day].forEach(range => {
+            allRanges.push({ day, range });
+        });
+    }
+    const selectedRange = allRanges[selectedIndex];
+    const selectedRangeText = selectedRange ? `${selectedRange.day}: ${selectedRange.range[0]} - ${selectedRange.range[1]}` : null;
+
+    const { embed, components } = createRemoveAvailabilityView(meeting.userAvailability[userId], session.page, session.pageSize, selectedIndex, selectedRangeText);
+    await interaction.update({ embeds: [embed], components });
+}
+
+async function handleRemoveAvailabilityPagination(interaction) {
+    const userId = interaction.user.id;
+    const session = availabilitySessions.get(userId);
+    if (!session) return;
+
+    const direction = interaction.customId.split('_')[2];
+    const currentPage = session.page;
+    const newPage = direction === 'next' ? currentPage + 1 : currentPage - 1;
+
+    session.page = newPage;
+    session.selectedIndex = -1;
+
+    const meeting = dataStore.getMeeting(session.meetingId);
+    if (!meeting) return;
+
+    const { embed, components } = createRemoveAvailabilityView(meeting.userAvailability[userId], newPage, session.pageSize);
+    await interaction.update({ embeds: [embed], components });
+}
+
+async function handleRemoveAvailabilityDelete(interaction, client) {
+    const userId = interaction.user.id;
+    const session = availabilitySessions.get(userId);
+    if (!session || session.selectedIndex === -1) return;
+
+    const meeting = dataStore.getMeeting(session.meetingId);
+    if (!meeting) {
+        await interaction.update({ content: "The meeting could not be found. It may have been finalized or deleted.", components: [], embeds: [] });
+        return;
+    }
+
+    const allRanges = [];
+    for (const day in meeting.userAvailability[userId]) {
+        meeting.userAvailability[userId][day].forEach(range => {
+            allRanges.push({ day, range });
+        });
+    }
+
+    const itemToRemove = allRanges[session.selectedIndex];
+    if (!itemToRemove) {
+        const { embed, components } = createRemoveAvailabilityView(meeting.userAvailability[userId], session.page, session.pageSize);
+        await interaction.update({ embeds: [embed], components });
+        return;
+    }
+    const day = itemToRemove.day;
+    const rangeToRemove = itemToRemove.range;
+
+    meeting.userAvailability[userId][day] = meeting.userAvailability[userId][day].filter(r => r[0] !== rangeToRemove[0] || r[1] !== rangeToRemove[1]);
+
+    if (meeting.userAvailability[userId][day].length === 0) {
+        delete meeting.userAvailability[userId][day];
+    }
+
+    dataStore.updateMeeting(session.meetingId, meeting);
+    session.selectedIndex = -1;
+
+    const { embed, components } = createRemoveAvailabilityView(meeting.userAvailability[userId], session.page, session.pageSize);
+    await interaction.update({ embeds: [embed], components });
+
+    try {
+        const channel = await client.channels.fetch(meeting.channelId);
+        const message = await channel.messages.fetch(session.meetingId);
+
+        const buf = await generateAvailabilityHeatmapImage(
+            meeting.selectedDays,
+            meeting.ranges,
+            meeting.userAvailability,
+            interaction.guild
+        );
+        const att = new AttachmentBuilder(buf, { name: 'heatmap.png' });
+        const updatedEmbed = EmbedBuilder.from(message.embeds[0])
+            .setDescription(`Updated: ${new Date().toLocaleString('en-GB', { timeZoneName: 'short' })}`)
+            .setImage('attachment://heatmap.png');
+
+        await message.edit({
+            embeds: [updatedEmbed],
+            files: [att]
+        });
+    } catch (error) {
+        console.error("Failed to update the original meeting message:", error);
+        await interaction.followUp({ content: "Could not update the meeting heatmap. The message may have been deleted.", ephemeral: true });
+    }
+}
+
+async function handleRemoveAvailabilityDone(interaction) {
+    const userId = interaction.user.id;
+    availabilitySessions.delete(userId);
+    await interaction.update({ content: "Your changes have been saved. You can dismiss this message now.", embeds: [], components: [] });
+}
+
 async function handleMeetingCommand(interaction, client) {
     const userId = interaction.user.id;
 
@@ -432,6 +567,18 @@ async function handleMeetingCommand(interaction, client) {
         if (interaction.customId.startsWith('finalize_prev_') || interaction.customId.startsWith('finalize_next_')) {
             return handleFinishMeetingPagination(interaction);
         }
+        if (interaction.customId === 'remove_availability') {
+            return handleRemoveAvailabilityButton(interaction);
+        }
+        if (interaction.customId.startsWith('remove_avail_prev_') || interaction.customId.startsWith('remove_avail_next_')) {
+            return handleRemoveAvailabilityPagination(interaction);
+        }
+        if (interaction.customId.startsWith('remove_avail_delete_')) {
+            return handleRemoveAvailabilityDelete(interaction, client);
+        }
+        if (interaction.customId === 'remove_avail_done') {
+            return handleRemoveAvailabilityDone(interaction);
+        }
     }
 
     if (interaction.isModalSubmit()) {
@@ -452,6 +599,9 @@ async function handleMeetingCommand(interaction, client) {
         }
         if (interaction.customId.startsWith('finalize_menu_')) {
             return handleFinishMeetingSelect(interaction);
+        }
+        if (interaction.customId.startsWith('remove_avail_select_')) {
+            return handleRemoveAvailabilitySelect(interaction);
         }
     }
 }
