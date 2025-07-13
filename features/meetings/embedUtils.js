@@ -20,13 +20,19 @@ function getDayButtons(selectedDays) {
     return rows;
 }
 
-function getControlRow() {
-    return new ActionRowBuilder().addComponents(
+function getControlRow(ranges, selectedIndex = -1) {
+    const row = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
             .setCustomId("add_range")
             .setLabel("Add Time Range")
-            .setStyle(ButtonStyle.Primary)
+            .setStyle(ButtonStyle.Primary),
+        new ButtonBuilder()
+            .setCustomId("delete_range")
+            .setLabel("Delete Selected Range")
+            .setStyle(ButtonStyle.Danger)
+            .setDisabled(ranges.length === 0 || selectedIndex === -1)
     );
+    return row;
 }
 
 function getConfirmDaysRow() {
@@ -35,6 +41,37 @@ function getConfirmDaysRow() {
             .setCustomId("confirm_days")
             .setLabel("Confirm Days")
             .setStyle(ButtonStyle.Primary)
+    );
+}
+
+function getTimeRangeSelectMenu(ranges, selectedIndex = -1) {
+    let options;
+    let placeholderText;
+    let isDisabled = false;
+
+    if (ranges.length === 0) {
+        options = [{
+            label: "No ranges added yet",
+            value: "no_ranges",
+            default: true
+        }];
+        placeholderText = "No ranges added yet";
+        isDisabled = true;
+    } else {
+        options = ranges.map((range, index) => ({
+            label: `${range[0]} - ${range[1]}`,
+            value: `${index}`,
+            default: index === selectedIndex
+        }));
+        placeholderText = selectedIndex !== -1 ? `${ranges[selectedIndex][0]} - ${ranges[selectedIndex][1]}` : "Select a range to delete";
+    }
+
+    return new ActionRowBuilder().addComponents(
+        new StringSelectMenuBuilder()
+            .setCustomId("select_range")
+            .setPlaceholder(placeholderText)
+            .addOptions(options)
+            .setDisabled(isDisabled)
     );
 }
 
@@ -117,17 +154,17 @@ async function generateAvailabilityHeatmapImage(days, ranges, availability, guil
     }
 
     let totalMinutes = 0;
-    ranges.forEach(({ start, end }) => {
-        const s = timeToMinutes(start);
-        const e = timeToMinutes(end);
+    ranges.forEach(range => {
+        const s = timeToMinutes(range[0]);
+        const e = timeToMinutes(range[1]);
         totalMinutes += (e - s);
     });
     const totalHours = totalMinutes / 60;
     const fontSizeIncrease = totalHours > 16 ? 3 : 0;
 
     const slots = [];
-    ranges.forEach(({ start, end }, idx) => {
-        const s = timeToMinutes(start), e = timeToMinutes(end);
+    ranges.forEach((range, idx) => {
+        const s = timeToMinutes(range[0]), e = timeToMinutes(range[1]);
         for (let t = s; t < e; t += 15) {
             slots.push({ time: t, start: t === s, end: t + 15 === e });
         }
@@ -157,7 +194,21 @@ async function generateAvailabilityHeatmapImage(days, ranges, availability, guil
     return canvas.toBuffer("image/png");
 }
 
-function createDaySelectionEmbed(selectedDays, showConfirm) {    const embed = new EmbedBuilder()        .setTitle("Select Days for Meeting")        .setDescription("Toggle days you want to include in the meeting availability.")        .setColor(0x0099ff);    return embed;}function createTimeRangeEmbed(selectedDays, ranges) {    const embed = new EmbedBuilder()        .setTitle("Add Time Ranges")        .setDescription("Add time ranges for the selected days.")        .setColor(0x0099ff);    if (ranges.length > 0) {        let description = "Current Ranges:\n";        ranges.forEach(range => {            description += `- ${range.start} - ${range.end}\n`;        });        embed.setDescription(description);    }    return embed;}
+function createDaySelectionEmbed(selectedDays, showConfirm) {    const embed = new EmbedBuilder()        .setTitle("Select Days for Meeting")        .setDescription("Toggle days you want to include in the meeting availability.")        .setColor(0x0099ff);    return embed;}function createTimeRangeEmbed(selectedDays, ranges, selectedIndex = -1) {
+    const embed = new EmbedBuilder()
+        .setTitle("Add Time Ranges")
+        .setDescription("Add time ranges for the selected days.")
+        .setColor(0x0099ff);
+
+    if (ranges.length > 0) {
+        let description = "Current Ranges:\n";
+        ranges.forEach((range, index) => {
+            description += `${index === selectedIndex ? ">" : "-"} ${range[0]} - ${range[1]}\n`;
+        });
+        embed.setDescription(description);
+    }
+    return embed;
+}
 
 function createRemoveAvailabilityView(userAvailability, page, pageSize, selectedIndex = -1, selectedRangeText = null) {
     const allRanges = [];
@@ -217,7 +268,7 @@ function createRemoveAvailabilityView(userAvailability, page, pageSize, selected
             .setStyle(ButtonStyle.Primary)
             .setDisabled(page >= totalPages),
         new ButtonBuilder()
-            .setCustomId(`remove_avail_delete_${selectedIndex}`)
+            .setCustomId("remove_avail_delete_${selectedIndex}")
             .setLabel("Delete")
             .setStyle(ButtonStyle.Danger)
             .setDisabled(selectedIndex === -1),
@@ -232,6 +283,8 @@ function createRemoveAvailabilityView(userAvailability, page, pageSize, selected
     return { embed, components };
 }
 
+
+
 module.exports = {
     getDayButtons,
     getControlRow,
@@ -244,5 +297,6 @@ module.exports = {
     generateAvailabilityHeatmapImage,
     createDaySelectionEmbed,
     createTimeRangeEmbed,
-    createRemoveAvailabilityView
+    createRemoveAvailabilityView,
+    getTimeRangeSelectMenu
 };

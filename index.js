@@ -101,7 +101,7 @@ client.on(Events.InteractionCreate, async interaction => {
             interaction.customId.startsWith('modal_') ||
             interaction.customId.startsWith('list_') ||
             interaction.customId.startsWith('finalize_') ||
-            ['confirm_days', 'add_range', 'final_confirm', 'show_top', 'add_modal', 'final_modal', 'remove_availability'].includes(interaction.customId) ||
+            ['confirm_days', 'add_range', 'final_confirm', 'show_top', 'add_modal', 'final_modal', 'remove_availability', 'delete_range', 'select_range'].includes(interaction.customId) ||
             interaction.customId.startsWith('remove_avail_')) {
             handler = handleMeetingCommand;
         } else if (interaction.customId === 'scheduleModal' || interaction.customId.startsWith('schedule_toggle_') || interaction.customId === 'confirm_schedule' || interaction.customId.startsWith('schedule_emoji_toggle_') || interaction.customId === 'schedule_final_confirm') {

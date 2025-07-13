@@ -149,7 +149,7 @@ async function drawTopRanges(ctx, days, ranges, availability, guild, dimensions,
     const results = [];
     for (const day of days) {
         for (const range of ranges) {
-            const rs = timeToMinutes(range.start), re = timeToMinutes(range.end);
+            const rs = timeToMinutes(range[0]), re = timeToMinutes(range[1]);
             const availList = [], notList = [];
             const allUserIds = new Set(Object.keys(availability || {}));
 
@@ -173,7 +173,7 @@ async function drawTopRanges(ctx, days, ranges, availability, guild, dimensions,
         ctx.font = `bold ${rangeTitleFontSize}px sans-serif`;
         top.forEach(res => {
             const totalUsers = Object.keys(availability || {}).length;
-            const text = `${res.day} ${res.start}–${res.end} (${res.avail.length}/${totalUsers})`;
+            const text = `${res.day} ${res[0]}–${res[1]} (${res.avail.length}/${totalUsers})`;
             maxTextWidth = Math.max(maxTextWidth, ctx.measureText(text).width);
         });
     }

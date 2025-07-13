@@ -29,7 +29,8 @@ const {
     roundTimeString,
     createDaySelectionEmbed,
     createTimeRangeEmbed,
-    createRemoveAvailabilityView
+    createRemoveAvailabilityView,
+    getTimeRangeSelectMenu
 } = require("./embedUtils");
 
 const { getMeeting, createMeeting, endMeeting, clearMeetings, setMeetingInterval, getMeetingByChannel, isValidTimeFormat, hasTimeRangeOverlap } = require("../../helpers/meetingHelpers");
@@ -41,7 +42,8 @@ async function handleMeetCommand(interaction) {
     const userId = interaction.user.id;
     sessions.set(userId, {
         selectedDays: new Set(DAYS),
-        ranges: []
+        ranges: [],
+        selectedRangeIndex: -1
     });
     const session = sessions.get(userId);
     session.owner = userId;
@@ -77,10 +79,12 @@ async function handleConfirmDaysButton(interaction) {
     if (!session || session.selectedDays.size === 0) {
         return interaction.followUp({ content: 'Select at least one day.', ephemeral: true });
     }
-    const embed = createTimeRangeEmbed(session.selectedDays, session.ranges);
+    const embed = createTimeRangeEmbed(session.selectedDays, session.ranges, session.selectedRangeIndex);
+    const components = [getControlRow(session.ranges, session.selectedRangeIndex), getFinalConfirmRow()];
+    components.unshift(getTimeRangeSelectMenu(session.ranges, session.selectedRangeIndex));
     return interaction.update({
         embeds: [embed],
-        components: [getControlRow(), getFinalConfirmRow()]
+        components: components
     });
 }
 
@@ -150,12 +154,59 @@ async function handleAddModalSubmit(interaction) {
         return interaction.followUp({ content: 'The time range overlaps with an existing range.', ephemeral: true });
     }
 
-    session.ranges.push({ start, end });
-    const embed = createTimeRangeEmbed(session.selectedDays, session.ranges);
+    session.ranges.push([start, end]);
+    session.selectedRangeIndex = -1;
+    const embed = createTimeRangeEmbed(session.selectedDays, session.ranges, session.selectedRangeIndex);
+    const components = [getControlRow(session.ranges, session.selectedRangeIndex), getFinalConfirmRow()];
+    components.unshift(getTimeRangeSelectMenu(session.ranges, session.selectedRangeIndex));
     await interaction.editReply({
         embeds: [embed],
-        components: [getControlRow(), getFinalConfirmRow()]
+        components: components
     });
+}
+
+async function handleTimeRangeSelect(interaction) {
+    const userId = interaction.user.id;
+    const session = sessions.get(userId);
+    if (!session) return;
+
+    const selectedIndex = parseInt(interaction.values[0]);
+    session.selectedRangeIndex = selectedIndex;
+
+    const embed = createTimeRangeEmbed(session.selectedDays, session.ranges, session.selectedRangeIndex);
+    const components = [getControlRow(session.ranges, session.selectedRangeIndex), getFinalConfirmRow()];
+    if (session.ranges.length > 0) {
+        components.unshift(getTimeRangeSelectMenu(session.ranges, session.selectedRangeIndex));
+    }
+    await interaction.update({
+        embeds: [embed],
+        components: components
+    });
+}
+
+async function handleDeleteRangeButton(interaction) {
+    await interaction.deferUpdate();
+    const userId = interaction.user.id;
+    const session = sessions.get(userId);
+    if (!session || session.selectedRangeIndex === -1) {
+        return interaction.followUp({ content: 'No range selected to delete.', ephemeral: true });
+    }
+
+    session.ranges.splice(session.selectedRangeIndex, 1);
+    session.selectedRangeIndex = -1;
+
+    const embed = createTimeRangeEmbed(session.selectedDays, session.ranges, session.selectedRangeIndex);
+    const components = [getControlRow(session.ranges, session.selectedRangeIndex), getFinalConfirmRow()];
+    components.unshift(getTimeRangeSelectMenu(session.ranges, session.selectedRangeIndex));
+    try {
+        await interaction.editReply({
+            embeds: [embed],
+            components: components
+        });
+    } catch (error) {
+        console.error("Failed to edit reply in handleDeleteRangeButton:", error);
+        await interaction.followUp({ content: "An error occurred while deleting the range.", ephemeral: true });
+    }
 }
 
 async function handleFinalModalSubmit(interaction, client) {
@@ -579,6 +630,9 @@ async function handleMeetingCommand(interaction, client) {
         if (interaction.customId === 'remove_avail_done') {
             return handleRemoveAvailabilityDone(interaction);
         }
+        if (interaction.customId === 'delete_range') {
+            return handleDeleteRangeButton(interaction);
+        }
     }
 
     if (interaction.isModalSubmit()) {
@@ -602,6 +656,9 @@ async function handleMeetingCommand(interaction, client) {
         }
         if (interaction.customId.startsWith('remove_avail_select_')) {
             return handleRemoveAvailabilitySelect(interaction);
+        }
+        if (interaction.customId === 'select_range') {
+            return handleTimeRangeSelect(interaction);
         }
     }
 }

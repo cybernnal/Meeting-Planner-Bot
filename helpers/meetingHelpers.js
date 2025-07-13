@@ -32,8 +32,10 @@ function hasTimeRangeOverlap(newStart, newEnd, existingRanges) {
     const newEndMin = timeToMinutes(newEnd);
 
     for (const r of existingRanges) {
-        const existingStartMin = timeToMinutes(r[0]);
-        const existingEndMin = timeToMinutes(r[1]);
+        const existingStart = Array.isArray(r) ? r[0] : r.start;
+        const existingEnd = Array.isArray(r) ? r[1] : r.end;
+        const existingStartMin = timeToMinutes(existingStart);
+        const existingEndMin = timeToMinutes(existingEnd);
         if (newStartMin < existingEndMin && newEndMin > existingStartMin) {
             return true;
         }
