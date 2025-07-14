@@ -1,24 +1,7 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder } = require("discord.js");
 const { timeToMinutes } = require("../features/meetings/embedUtils");
 
-// Helper function to create a day selection embed
-function createDaySelectionEmbed(selectedDays, hasSelectedDays) {
-    return new EmbedBuilder()
-        .setTitle('Select Days')
-        .setDescription(hasSelectedDays
-            ? `Selected Days: ${[...selectedDays].join(', ')}. Press Confirm Days to continue.`
-            : 'No days selected! Please select at least one.')
-        .setColor(hasSelectedDays ? 0x3498db : 0xe74c3c);
-}
-
-// Helper function to create a time range embed
-function createTimeRangeEmbed(selectedDays, ranges) {
-    const rangeLines = ranges.map(r => `- ${r.start}–${r.end}`).join('\n');
-    return new EmbedBuilder()
-        .setTitle('Add Time Ranges')
-        .setDescription(`Selected Days: ${[...selectedDays].join(', ')}\nTime Ranges:\n${rangeLines}`)
-        .setColor(0x3498db);
-}
+ 
 
 // Helper function to validate time format
 function isValidTimeFormat(time) {
@@ -91,8 +74,6 @@ function getPaginationComponents(meetingsData, currentPage, perPage, customIdPre
 }
 
 module.exports = {
-    createDaySelectionEmbed,
-    createTimeRangeEmbed,
     isValidTimeFormat,
     hasTimeRangeOverlap,
     getPaginationComponents

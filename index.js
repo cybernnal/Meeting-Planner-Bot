@@ -94,20 +94,37 @@ client.on(Events.InteractionCreate, async interaction => {
     if (interaction.isChatInputCommand()) {
         handler = client.commands.get(interaction.commandName);
     } else if (interaction.isButton() || interaction.isModalSubmit() || interaction.isStringSelectMenu()) {
-        // Route all component interactions for meetings to the meeting handler
-        if (interaction.customId.includes('meet') ||
-            interaction.customId.startsWith('toggle_') ||
-            interaction.customId.startsWith('avail_') ||
-            interaction.customId.startsWith('modal_') ||
-            interaction.customId.startsWith('list_') ||
-            interaction.customId.startsWith('finalize_') ||
-            ['confirm_days', 'add_range', 'final_confirm', 'show_top', 'add_modal', 'final_modal', 'remove_availability', 'delete_range', 'select_range'].includes(interaction.customId) ||
-            interaction.customId.startsWith('remove_avail_')) {
-            handler = handleMeetingCommand;
-        } else if (interaction.customId === 'scheduleModal' || interaction.customId.startsWith('schedule_toggle_') || interaction.customId === 'confirm_schedule' || interaction.customId.startsWith('schedule_emoji_toggle_') || interaction.customId === 'schedule_final_confirm') {
-            handler = handleScheduleCommand;
+        const componentHandlers = {
+            // Meeting related components
+            'toggle_': handleMeetingCommand,
+            'avail_': handleMeetingCommand,
+            'modal_': handleMeetingCommand,
+            'list_': handleMeetingCommand,
+            'finalize_': handleMeetingCommand,
+            'remove_avail_': handleMeetingCommand,
+            'confirm_days': handleMeetingCommand,
+            'add_range': handleMeetingCommand,
+            'final_confirm': handleMeetingCommand,
+            'show_top': handleMeetingCommand,
+            'add_modal': handleMeetingCommand,
+            'final_modal': handleMeetingCommand,
+            'remove_availability': handleMeetingCommand,
+            'delete_range': handleMeetingCommand,
+            'select_range': handleMeetingCommand,
+            // Schedule related components
+            'scheduleModal': handleScheduleCommand,
+            'schedule_toggle_': handleScheduleCommand,
+            'confirm_schedule': handleScheduleCommand,
+            'schedule_emoji_toggle_': handleScheduleCommand,
+            'schedule_final_confirm': handleScheduleCommand,
+        };
+
+        for (const key in componentHandlers) {
+            if (interaction.customId.startsWith(key)) {
+                handler = componentHandlers[key];
+                break;
+            }
         }
-        // Add other component handlers here if needed (e.g., for spin)
     }
 
     if (!handler) {

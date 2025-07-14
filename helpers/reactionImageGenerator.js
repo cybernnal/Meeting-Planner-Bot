@@ -50,36 +50,7 @@ async function generateReactionImage(reactionsData) {
         context.fillRect(padding, y, canvasWidth - 2 * padding, cellHeight);
     }
 
-    // Function to draw a custom checkmark
-    function drawCheckmark(ctx, x, y, size, color) {
-        ctx.save();
-        ctx.beginPath();
-        ctx.strokeStyle = color;
-        ctx.lineWidth = size / 8;
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-        ctx.moveTo(x - size / 3, y);
-        ctx.lineTo(x - size / 10, y + size / 3);
-        ctx.lineTo(x + size / 3, y - size / 3);
-        ctx.stroke();
-        ctx.restore();
-    }
-
-    // Function to draw a custom cross
-    function drawCross(ctx, x, y, size, color) {
-        ctx.save();
-        ctx.beginPath();
-        ctx.strokeStyle = color;
-        ctx.lineWidth = size / 8;
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-        ctx.moveTo(x - size / 3, y - size / 3);
-        ctx.lineTo(x + size / 3, y + size / 3);
-        ctx.moveTo(x + size / 3, y - size / 3);
-        ctx.lineTo(x - size / 3, y + size / 3);
-        ctx.stroke();
-        ctx.restore();
-    }
+    const { drawCheckmark, drawCross } = require('./drawingUtils');
 
     // Set common text properties
     context.textAlign = 'center';
