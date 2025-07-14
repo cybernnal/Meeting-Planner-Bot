@@ -14,14 +14,13 @@ const { generateReactionImage } = require("./helpers/reactionImageGenerator");
 
 const client = new Client({
     intents: [
-        GatewayIntentBits.Guilds,       // Required for basic guild info and slash commands
-        GatewayIntentBits.GuildMembers, // Required to fetch members for roles and spin command
-        GatewayIntentBits.MessageContent, // Required to read message content for filtering
-        GatewayIntentBits.GuildMessageReactions, // Required to receive reaction events
+        GatewayIntentBits.Guilds,
+        GatewayIntentBits.GuildMembers,
+        GatewayIntentBits.MessageContent,
+        GatewayIntentBits.GuildMessageReactions,
     ],
 });
 
-// Command Handler
 client.commands = new Collection();
 const commandHandlers = {
     'spin': handleSpinCommand,
@@ -83,8 +82,6 @@ initLogger(client);
 
 client.once(Events.ClientReady, async () => {
     botLog("Oreo has awakened. The judgment shall now commence.");
-
-    
 });
 
 
@@ -144,10 +141,8 @@ client.on(Events.InteractionCreate, async interaction => {
 });
 
 client.on(Events.MessageReactionAdd, async (reaction, user) => {
-    // Ignore reactions from the bot itself
     if (user.id === client.user.id) return;
 
-    // When a reaction is received, check if the structure is partial
     if (reaction.partial) {
         try {
             await reaction.fetch();
@@ -157,50 +152,35 @@ client.on(Events.MessageReactionAdd, async (reaction, user) => {
         }
     }
 
-    // Check if the message is a scheduled event
-    console.log('Checking for scheduled event for message ID:', reaction.message.id);
     const scheduledEvent = dataStore.getScheduledEventByMessageId(reaction.message.id);
-    console.log('Scheduled event found:', scheduledEvent);
 
     if (scheduledEvent) {
         const emojis = dataStore.getEmojis();
-        console.log('dataStore.getEmojis():', emojis);
         const allowedEmojiNames = scheduledEvent.selectedEmojis;
-        console.log('scheduledEvent.selectedEmojis:', allowedEmojiNames);
 
         let reactedEmojiName;
-        if (reaction.emoji.id) { // Custom emoji
-            reactedEmojiName = reaction.emoji.name; // Custom emojis use their name
-        } else { // Unicode emoji
-            // Find the name of the unicode emoji from our predefined list
+        if (reaction.emoji.id) {
+            reactedEmojiName = reaction.emoji.name;
+        } else {
             const foundEmoji = emojis.find(e => e.emoji === reaction.emoji.name);
-            reactedEmojiName = foundEmoji ? foundEmoji.name : null; // Use name if found, else null
+            reactedEmojiName = foundEmoji ? foundEmoji.name : null;
         }
-        console.log('reactedEmojiName:', reactedEmojiName);
-        console.log('reaction.emoji.name (raw):', reaction.emoji.name);
-        console.log('reaction.emoji.id (raw):', reaction.emoji.id);
 
         if (reactedEmojiName === null || !allowedEmojiNames.includes(reactedEmojiName)) {
-            console.log(`Comparison result: REMOVING reaction`);
-            console.log(`Removing unwanted reaction: ${reactedEmojiName} from message ${reaction.message.id} by user ${user.tag}`);
             try {
                 await reaction.remove();
             } catch (error) {
                 console.error('Failed to remove reaction:', error);
             }
         } else {
-            console.log(`Comparison result: KEEPING reaction`);
-            console.log(`Keeping allowed reaction: ${reactedEmojiName} on message ${reaction.message.id} by user ${user.tag}`);
             dataStore.addReaction(reaction.message.id, reactedEmojiName, user.id);
         }
     }
 });
 
 client.on(Events.MessageReactionRemove, async (reaction, user) => {
-    // Ignore reactions from the bot itself
     if (user.id === client.user.id) return;
 
-    // When a reaction is received, check if the structure is partial
     if (reaction.partial) {
         try {
             await reaction.fetch();
@@ -210,16 +190,13 @@ client.on(Events.MessageReactionRemove, async (reaction, user) => {
         }
     }
 
-    // Check if the message is a scheduled event
-    console.log('Checking for scheduled event for message ID:', reaction.message.id);
     const scheduledEvent = dataStore.getScheduledEventByMessageId(reaction.message.id);
-    console.log('Scheduled event found:', scheduledEvent);
 
     if (scheduledEvent) {
         let reactedEmojiName;
-        if (reaction.emoji.id) { // Custom emoji
+        if (reaction.emoji.id) {
             reactedEmojiName = reaction.emoji.name;
-        } else { // Unicode emoji
+        } else {
             const emojis = dataStore.getEmojis();
             const foundEmoji = emojis.find(e => e.emoji === reaction.emoji.name);
             reactedEmojiName = foundEmoji ? foundEmoji.name : null;

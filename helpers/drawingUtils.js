@@ -251,9 +251,8 @@ async function drawTopRanges(ctx, days, ranges, availability, guild, dimensions,
 
 
 function findOptimalOverlapRanges(day, meetingRanges, userAvailability, timeToMinutes, minutesToTime) {
-    const allIntervals = []; // Store all 15-minute intervals with their availability count
+    const allIntervals = [];
 
-    // Step 1: Calculate availability for each 15-minute interval within meeting ranges
     for (const [meetingStartStr, meetingEndStr] of meetingRanges) {
         const meetingStartMin = timeToMinutes(meetingStartStr);
         const meetingEndMin = timeToMinutes(meetingEndStr);
@@ -271,7 +270,6 @@ function findOptimalOverlapRanges(day, meetingRanges, userAvailability, timeToMi
                         const userStartMin = timeToMinutes(userStartStr);
                         const userEndMin = timeToMinutes(userEndStr);
 
-                        // Check for overlap between user availability and the current 15-min interval
                         if (Math.max(userStartMin, intervalStart) < Math.min(userEndMin, intervalEnd)) {
                             availableUsersCount++;
                             usersInThisInterval.add(userId);
@@ -291,25 +289,22 @@ function findOptimalOverlapRanges(day, meetingRanges, userAvailability, timeToMi
         }
     }
 
-    // Sort intervals by count (descending) to prioritize higher availability
     allIntervals.sort((a, b) => b.count - a.count);
 
     const optimalRanges = [];
-    const processedIntervals = new Set(); // To keep track of intervals already merged
+    const processedIntervals = new Set();
 
     for (const interval of allIntervals) {
         const intervalKey = `${interval.startMin}-${interval.endMin}`;
         if (processedIntervals.has(intervalKey)) {
-            continue; // Skip if already processed as part of a larger range
+            continue;
         }
 
         let currentRangeStart = interval.startMin;
         let currentRangeEnd = interval.endMin;
         let currentRangeUsers = new Set(interval.users);
-        let currentRangeCount = interval.count; // The count of the current interval, which is the peak for this merge
+        let currentRangeCount = interval.count;
 
-        // Attempt to merge with adjacent intervals that have the same peak count
-        // Look forward
         for (let i = interval.endMin; i < 1440; i += 15) {
             const nextInterval = allIntervals.find(
                 (int) => int.startMin === i && int.count === currentRangeCount && !processedIntervals.has(`${int.startMin}-${int.endMin}`)
@@ -323,7 +318,6 @@ function findOptimalOverlapRanges(day, meetingRanges, userAvailability, timeToMi
             }
         }
 
-        // Look backward
         for (let i = interval.startMin - 15; i >= 0; i -= 15) {
             const prevInterval = allIntervals.find(
                 (int) => int.endMin === i + 15 && int.count === currentRangeCount && !processedIntervals.has(`${int.startMin}-${int.endMin}`)
@@ -349,10 +343,9 @@ function findOptimalOverlapRanges(day, meetingRanges, userAvailability, timeToMi
             count: availUsers.length,
             duration: currentRangeEnd - currentRangeStart
         });
-        processedIntervals.add(intervalKey); // Mark the initial interval as processed
+        processedIntervals.add(intervalKey);
     }
 
-    // Final sort by count (descending), then duration (descending)
     optimalRanges.sort((a, b) => {
         if (b.count !== a.count) {
             return b.count - a.count;
@@ -368,5 +361,5 @@ module.exports = {
     drawCross,
     drawHeatmap,
     drawTopRanges,
-    findOptimalOverlapRanges // Export the new function
+    findOptimalOverlapRanges
 };

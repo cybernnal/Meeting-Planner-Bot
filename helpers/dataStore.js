@@ -24,7 +24,6 @@ function loadData() {
             if (fileContent) {
                 data = JSON.parse(fileContent);
             } else {
-                // File is empty, initialize with default data and save.
                 data = { meetings: {}, spinWinners: {}, scheduledEvents: [] };
                 saveData();
             }
@@ -36,7 +35,6 @@ function loadData() {
             data = { meetings: {}, spinWinners: {}, scheduledEvents: [] };
         }
     } else {
-        // File doesn't exist, create it with default data.
         saveData();
     }
 }
@@ -49,7 +47,6 @@ function saveData() {
     }
 }
 
-// Load data on module initialization
 loadData();
 
 function getMeeting(id) {

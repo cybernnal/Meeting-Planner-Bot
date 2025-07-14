@@ -8,11 +8,8 @@ async function generateReactionImage(reactionsData) {
     const cellHeight = 50;
     const padding = 15;
 
-    // Set font to measure text
     const font = 'bold 20px sans-serif';
-
-    // Create a temporary canvas and context to measure text widths
-    const tempCanvas = createCanvas(1, 1); // Smallest possible canvas
+    const tempCanvas = createCanvas(1, 1);
     const tempContext = tempCanvas.getContext('2d');
     tempContext.font = font;
 
@@ -24,27 +21,23 @@ async function generateReactionImage(reactionsData) {
         }
     }
 
-    const userColumnWidth = Math.max(120, maxUsernameWidth + 30); // Ensure a minimum width, add padding
-    const emojiColumnWidth = 120; // Fixed width for emoji columns
+    const userColumnWidth = Math.max(120, maxUsernameWidth + 30);
+    const emojiColumnWidth = 120;
 
     const canvasWidth = userColumnWidth + (emojiColumnWidth * allEmojis.length) + padding * 2;
     const canvasHeight = cellHeight * (reactedUsers.size + 1) + padding * 2;
 
-    // Create the canvas
     const canvas = createCanvas(canvasWidth, canvasHeight);
     const context = canvas.getContext('2d');
 
-    // Define colors for alternating rows and columns
-    const baseBgColor = '#2C2F33'; // Discord dark mode background color
-    const rowEvenColor = '#36393F'; // Slightly lighter gray
-    const rowOddColor = '#2F3136';  // Slightly darker gray
+    const baseBgColor = '#2C2F33';
+    const rowEvenColor = '#36393F';
+    const rowOddColor = '#2F3136';
 
-    // Draw background
     context.fillStyle = baseBgColor;
     context.fillRect(0, 0, canvasWidth, canvasHeight);
 
-    // Draw alternating row backgrounds
-    for (let i = 0; i <= reactedUsers.size; i++) { // Include header row (i=0)
+    for (let i = 0; i <= reactedUsers.size; i++) {
         const y = padding + i * cellHeight;
         context.fillStyle = (i % 2 === 0) ? rowEvenColor : rowOddColor;
         context.fillRect(padding, y, canvasWidth - 2 * padding, cellHeight);
@@ -52,43 +45,38 @@ async function generateReactionImage(reactionsData) {
 
     const { drawCheckmark, drawCross } = require('./drawingUtils');
 
-    // Set common text properties
     context.textAlign = 'center';
     context.textBaseline = 'middle';
 
-    // Draw header row - Custom Emojis and Unicode Emojis
     allEmojis.forEach((emojiName, index) => {
         const x = padding + userColumnWidth + emojiColumnWidth * index + emojiColumnWidth / 2;
         const y = padding + cellHeight / 2;
 
-        context.save(); // Save context before setting font and fillStyle for each emoji
-        context.font = 'bold 18px sans-serif'; // Apply generic font for all emojis
-        context.fillStyle = '#FFFFFF'; // Apply white color for all emojis
+        context.save();
+        context.font = 'bold 18px sans-serif';
+        context.fillStyle = '#FFFFFF';
         context.fillText(emojiName, x, y);
-        context.restore(); // Restore context after drawing each emoji
+        context.restore();
     });
 
-    // Data rows settings
     let rowIndex = 1;
     for (const [userId, userData] of reactedUsers.entries()) {
-        // Draw username
-        context.save(); // Save context before setting font and fillStyle
-        context.font = 'bold 20px sans-serif'; // Explicitly set font for usernames
-        context.fillStyle = '#FFFFFF'; // Explicitly set color for usernames
+        context.save();
+        context.font = 'bold 20px sans-serif';
+        context.fillStyle = '#FFFFFF';
         context.fillText(userData.user.username, padding + userColumnWidth / 2, padding + cellHeight * (rowIndex + 0.5));
-        context.restore(); // Restore context after drawing
+        context.restore();
 
-        // Draw checkmarks/crosses for reactions
         allEmojis.forEach((emojiName, colIndex) => {
             const hasReacted = userData.emojis.has(emojiName);
-            const iconSize = 20; // Size of the checkmark/cross
+            const iconSize = 20;
             const iconX = padding + userColumnWidth + emojiColumnWidth * colIndex + emojiColumnWidth / 2;
             const iconY = padding + cellHeight * (rowIndex + 0.5);
 
             if (hasReacted) {
-                drawCheckmark(context, iconX, iconY, iconSize, '#00FF00'); // Green
+                drawCheckmark(context, iconX, iconY, iconSize, '#00FF00');
             } else {
-                drawCross(context, iconX, iconY, iconSize, '#FF0000'); // Red
+                drawCross(context, iconX, iconY, iconSize, '#FF0000');
             }
         });
         rowIndex++;

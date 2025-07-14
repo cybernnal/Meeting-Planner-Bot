@@ -3,13 +3,11 @@ const { timeToMinutes, roundTimeString } = require("../features/meetings/embedUt
 
  
 
-// Helper function to validate time format
 function isValidTimeFormat(time) {
     const regex = /^([01]?[0-9]|2[0-3]):([0-5][0-9])$|^24:00$/;
     return regex.test(time);
 }
 
-// Helper function to check for time range overlaps
 function hasTimeRangeOverlap(newStart, newEnd, existingRanges) {
     const newStartMin = timeToMinutes(newStart);
     const newEndMin = timeToMinutes(newEnd);
@@ -55,7 +53,6 @@ async function validateAndProcessTimeInput(interaction, startRaw, endRaw, existi
     return { start, end, s, e };
 }
 
-// Generic pagination helper
 function getPaginationComponents(meetingsData, currentPage, perPage, customIdPrefix, embedTitlePrefix, selectMenuPlaceholder, isFinalize = false) {
     const totalPages = Math.ceil(meetingsData.length / perPage);
     const startIdx = (currentPage - 1) * perPage;

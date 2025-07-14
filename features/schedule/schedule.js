@@ -105,7 +105,6 @@ async function handleScheduleCommand(interaction, client) {
                 state.selectedRoles.push(roleId);
             }
 
-            // Update the map with the modified state
             scheduleState.set(interaction.user.id, state);
             
 
@@ -223,7 +222,7 @@ async function handleScheduleCommand(interaction, client) {
 
             const sentMessage = await interaction.channel.send({ embeds: [publicEmbed] });
 
-            // Save the scheduled event to data.json
+            
             dataStore.saveScheduledEvent({
                 messageId: sentMessage.id,
                 timestamp: timestamp,
