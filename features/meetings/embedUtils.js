@@ -189,7 +189,7 @@ async function generateAvailabilityHeatmapImage(days, ranges, availability, guil
 
     const dimensions = { scale, cellHeight, cellWidth, labelWidth, padding, height, width, heatmapWidth, topRangesSectionWidth, fontSizeIncrease };
     drawHeatmap(ctx, days, slots, availability, dimensions, minutesToTime, timeToMinutes);
-    await drawTopRanges(ctx, days, ranges, availability, guild, dimensions, timeToMinutes, drawUserList, formatUserId);
+    await drawTopRanges(ctx, days, ranges, availability, guild, dimensions, timeToMinutes, minutesToTime, drawUserList, formatUserId);
 
     return canvas.toBuffer("image/png");
 }

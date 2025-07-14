@@ -136,7 +136,7 @@ function drawHeatmap(ctx, days, slots, availability, dimensions, minutesToTime, 
     });
 }
 
-async function drawTopRanges(ctx, days, ranges, availability, guild, dimensions, timeToMinutes, drawUserList, formatUserId) {
+async function drawTopRanges(ctx, days, ranges, availability, guild, dimensions, timeToMinutes, minutesToTime, drawUserList, formatUserId) {
     const { scale, width, padding, heatmapWidth, fontSizeIncrease } = dimensions;
     let { topRangesSectionWidth } = dimensions;
 
@@ -146,34 +146,29 @@ async function drawTopRanges(ctx, days, ranges, availability, guild, dimensions,
     const userListLineHeight = 17 + fontSizeIncrease;
     const userListIconSize = 8 + fontSizeIncrease;
 
-    const results = [];
+    let allOptimalRanges = [];
     for (const day of days) {
-        for (const range of ranges) {
-            const rs = timeToMinutes(range[0]), re = timeToMinutes(range[1]);
-            const availList = [], notList = [];
-            const allUserIds = new Set(Object.keys(availability || {}));
-
-            for (const uid of allUserIds) {
-                const userDays = availability[uid];
-                const overlaps = userDays && userDays[day] && userDays[day].some(([us, ue]) => {
-                    const usMin = timeToMinutes(us), ueMin = timeToMinutes(ue);
-                    return !(ueMin <= rs || usMin >= re);
-                });
-                if (overlaps) availList.push(uid);
-                else notList.push(uid);
-            }
-            results.push({ day, start: range.start, end: range.end, avail: availList, notAvail: notList });
-        }
+        const optimalRangesForDay = findOptimalOverlapRanges(day, ranges, availability, timeToMinutes, minutesToTime);
+        allOptimalRanges = allOptimalRanges.concat(optimalRangesForDay);
     }
 
-    const top = results.filter(res => res.avail.length > 0).slice(0, 4);
+    // Sort all optimal ranges by the number of available users (descending)
+    // and then by duration (descending) to get the best overall ranges
+    allOptimalRanges.sort((a, b) => {
+        if (b.avail.length !== a.avail.length) {
+            return b.avail.length - a.avail.length;
+        }
+        return b.duration - a.duration;
+    });
+
+    const top = allOptimalRanges.slice(0, 4);
 
     let maxTextWidth = 0;
     if (top.length > 0) {
         ctx.font = `bold ${rangeTitleFontSize}px sans-serif`;
         top.forEach(res => {
             const totalUsers = Object.keys(availability || {}).length;
-            const text = `${res.day} ${res[0]}–${res[1]} (${res.avail.length}/${totalUsers})`;
+            const text = `${res.day} ${res.start}–${res.end} (${res.avail.length}/${totalUsers})`;
             maxTextWidth = Math.max(maxTextWidth, ctx.measureText(text).width);
         });
     }
@@ -228,6 +223,7 @@ async function drawTopRanges(ctx, days, ranges, availability, guild, dimensions,
             ctx.font = `bold ${rangeTitleFontSize}px sans-serif`;
             ctx.fillStyle = "#FFFFFF";
             const totalUsers = Object.keys(availability || {}).length;
+            res.notAvail = Object.keys(availability || {}).filter(userId => !res.avail.includes(userId));
             ctx.fillText(`${res.day} ${res.start}–${res.end} (${res.avail.length}/${totalUsers})`, userListStartX, currentY);
             currentY += userListLineHeight;
 
@@ -248,9 +244,129 @@ async function drawTopRanges(ctx, days, ranges, availability, guild, dimensions,
     }
 }
 
+
+
+
+
+
+
+function findOptimalOverlapRanges(day, meetingRanges, userAvailability, timeToMinutes, minutesToTime) {
+    const allIntervals = []; // Store all 15-minute intervals with their availability count
+
+    // Step 1: Calculate availability for each 15-minute interval within meeting ranges
+    for (const [meetingStartStr, meetingEndStr] of meetingRanges) {
+        const meetingStartMin = timeToMinutes(meetingStartStr);
+        const meetingEndMin = timeToMinutes(meetingEndStr);
+
+        for (let min = meetingStartMin; min < meetingEndMin; min += 15) {
+            const intervalStart = min;
+            const intervalEnd = min + 15;
+            let availableUsersCount = 0;
+            const usersInThisInterval = new Set();
+
+            for (const userId in userAvailability) {
+                const userDayAvailability = userAvailability[userId]?.[day];
+                if (userDayAvailability) {
+                    for (const [userStartStr, userEndStr] of userDayAvailability) {
+                        const userStartMin = timeToMinutes(userStartStr);
+                        const userEndMin = timeToMinutes(userEndStr);
+
+                        // Check for overlap between user availability and the current 15-min interval
+                        if (Math.max(userStartMin, intervalStart) < Math.min(userEndMin, intervalEnd)) {
+                            availableUsersCount++;
+                            usersInThisInterval.add(userId);
+                        }
+                    }
+                }
+            }
+
+            if (availableUsersCount > 0) {
+                allIntervals.push({
+                    startMin: intervalStart,
+                    endMin: intervalEnd,
+                    count: availableUsersCount,
+                    users: Array.from(usersInThisInterval)
+                });
+            }
+        }
+    }
+
+    // Sort intervals by count (descending) to prioritize higher availability
+    allIntervals.sort((a, b) => b.count - a.count);
+
+    const optimalRanges = [];
+    const processedIntervals = new Set(); // To keep track of intervals already merged
+
+    for (const interval of allIntervals) {
+        const intervalKey = `${interval.startMin}-${interval.endMin}`;
+        if (processedIntervals.has(intervalKey)) {
+            continue; // Skip if already processed as part of a larger range
+        }
+
+        let currentRangeStart = interval.startMin;
+        let currentRangeEnd = interval.endMin;
+        let currentRangeUsers = new Set(interval.users);
+        let currentRangeCount = interval.count; // The count of the current interval, which is the peak for this merge
+
+        // Attempt to merge with adjacent intervals that have the same peak count
+        // Look forward
+        for (let i = interval.endMin; i < 1440; i += 15) {
+            const nextInterval = allIntervals.find(
+                (int) => int.startMin === i && int.count === currentRangeCount && !processedIntervals.has(`${int.startMin}-${int.endMin}`)
+            );
+            if (nextInterval) {
+                currentRangeEnd = nextInterval.endMin;
+                nextInterval.users.forEach(user => currentRangeUsers.add(user));
+                processedIntervals.add(`${nextInterval.startMin}-${nextInterval.endMin}`);
+            } else {
+                break;
+            }
+        }
+
+        // Look backward
+        for (let i = interval.startMin - 15; i >= 0; i -= 15) {
+            const prevInterval = allIntervals.find(
+                (int) => int.endMin === i + 15 && int.count === currentRangeCount && !processedIntervals.has(`${int.startMin}-${int.endMin}`)
+            );
+            if (prevInterval) {
+                currentRangeStart = prevInterval.startMin;
+                prevInterval.users.forEach(user => currentRangeUsers.add(user));
+                processedIntervals.add(`${prevInterval.startMin}-${prevInterval.endMin}`);
+            } else {
+                break;
+            }
+        }
+
+        const availUsers = Array.from(currentRangeUsers);
+        const notAvailUsers = Object.keys(userAvailability || {}).filter(userId => !availUsers.includes(userId));
+
+        optimalRanges.push({
+            day: day,
+            start: minutesToTime(currentRangeStart),
+            end: minutesToTime(currentRangeEnd),
+            avail: availUsers,
+            notAvail: notAvailUsers,
+            count: availUsers.length,
+            duration: currentRangeEnd - currentRangeStart
+        });
+        processedIntervals.add(intervalKey); // Mark the initial interval as processed
+    }
+
+    // Final sort by count (descending), then duration (descending)
+    optimalRanges.sort((a, b) => {
+        if (b.count !== a.count) {
+            return b.count - a.count;
+        }
+        return b.duration - a.duration;
+    });
+
+    return optimalRanges;
+}
+
 module.exports = {
     drawCheckmark,
     drawCross,
     drawHeatmap,
-    drawTopRanges
+    drawTopRanges,
+    findOptimalOverlapRanges // Export the new function
 };
