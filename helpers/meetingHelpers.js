@@ -1,5 +1,5 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder } = require("discord.js");
-const { timeToMinutes } = require("../features/meetings/embedUtils");
+const { timeToMinutes, roundTimeString } = require("../features/meetings/embedUtils");
 
  
 
@@ -24,6 +24,35 @@ function hasTimeRangeOverlap(newStart, newEnd, existingRanges) {
         }
     }
     return false;
+}
+
+async function validateAndProcessTimeInput(interaction, startRaw, endRaw, existingRanges, minDuration = 30) {
+    if (!isValidTimeFormat(startRaw) || !isValidTimeFormat(endRaw) || (endRaw === '24:00' && startRaw === '24:00')) {
+        await interaction.followUp({ content: 'Invalid time format. Use HH:MM (24h).', ephemeral: true });
+        return null;
+    }
+
+    const start = roundTimeString(startRaw);
+    const end = roundTimeString(endRaw);
+
+    if (startRaw !== start || endRaw !== end) {
+        await interaction.followUp({ content: `Times rounded to nearest quarter hour: ${startRaw} -> ${start}, ${endRaw} -> ${end}`, ephemeral: true });
+    }
+
+    const s = timeToMinutes(start), e = timeToMinutes(end);
+    if (e <= s && !(e === 1440 && s === 0)) {
+        await interaction.followUp({ content: 'End must be after start.', ephemeral: true });
+        return null;
+    }
+    if ((e - s) < minDuration && !(e === 1440 && s === 0)) {
+        await interaction.followUp({ content: `Time range must be at least ${minDuration} minutes.`, ephemeral: true });
+        return null;
+    }
+    if (hasTimeRangeOverlap(start, end, existingRanges)) {
+        await interaction.followUp({ content: 'The time range overlaps with an existing range.', ephemeral: true });
+        return null;
+    }
+    return { start, end, s, e };
 }
 
 // Generic pagination helper
@@ -76,5 +105,6 @@ function getPaginationComponents(meetingsData, currentPage, perPage, customIdPre
 module.exports = {
     isValidTimeFormat,
     hasTimeRangeOverlap,
+    validateAndProcessTimeInput,
     getPaginationComponents
 };

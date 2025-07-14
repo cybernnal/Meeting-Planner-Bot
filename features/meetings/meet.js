@@ -33,7 +33,7 @@ const {
     getTimeRangeSelectMenu
 } = require("./embedUtils");
 
-const { getMeeting, createMeeting, endMeeting, clearMeetings, setMeetingInterval, getMeetingByChannel, isValidTimeFormat, hasTimeRangeOverlap } = require("../../helpers/meetingHelpers");
+const { getMeeting, createMeeting, endMeeting, clearMeetings, setMeetingInterval, getMeetingByChannel, validateAndProcessTimeInput, getPaginationComponents } = require("../../helpers/meetingHelpers");
 
 const sessions = new Map();
 const availabilitySessions = new Map();
@@ -132,27 +132,9 @@ async function handleAddModalSubmit(interaction) {
     const startRaw = interaction.fields.getTextInputValue('start');
     const endRaw = interaction.fields.getTextInputValue('end');
 
-    if (!isValidTimeFormat(startRaw) || !isValidTimeFormat(endRaw) || (endRaw === '24:00' && startRaw === '24:00')) {
-        return interaction.followUp({ content: 'Invalid time format. Use HH:MM (24h).', ephemeral: true });
-    }
-
-    const start = roundTimeString(startRaw);
-    const end = roundTimeString(endRaw);
-
-    if (startRaw !== start || endRaw !== end) {
-        await interaction.followUp({ content: `Times rounded to nearest quarter hour: ${startRaw} -> ${start}, ${endRaw} -> ${end}`, ephemeral: true });
-    }
-
-    const s = timeToMinutes(start), e = timeToMinutes(end);
-    if (e <= s && !(e === 1440 && s === 0)) {
-        return interaction.followUp({ content: 'End must be after start.', ephemeral: true });
-    }
-    if ((e - s) < 30 && !(e === 1440 && s === 0)) {
-        return interaction.followUp({ content: 'Time range must be at least 30 minutes.', ephemeral: true });
-    }
-    if (hasTimeRangeOverlap(start, end, session.ranges)) {
-        return interaction.followUp({ content: 'The time range overlaps with an existing range.', ephemeral: true });
-    }
+    const processedTimes = await validateAndProcessTimeInput(interaction, startRaw, endRaw, session.ranges);
+    if (!processedTimes) return;
+    const { start, end, s, e } = processedTimes;
 
     session.ranges.push([start, end]);
     session.selectedRangeIndex = -1;
@@ -279,30 +261,16 @@ async function handleAvailabilityModalSubmit(interaction) {
     const startRaw = interaction.fields.getTextInputValue('start');
     const endRaw = interaction.fields.getTextInputValue('end');
 
-    if (!isValidTimeFormat(startRaw) || !isValidTimeFormat(endRaw) || (endRaw === '24:00' && startRaw === '24:00')) {
-        return interaction.followUp({ content: 'Invalid time format. Use HH:MM (24h).', ephemeral: true });
-    }
-
-    const start = roundTimeString(startRaw);
-    const end = roundTimeString(endRaw);
-
-    if (startRaw !== start || endRaw !== end) {
-        await interaction.followUp({ content: `Times rounded to nearest quarter hour: ${startRaw} -> ${start}, ${endRaw} -> ${end}`, ephemeral: true });
-    }
-
-    const s = timeToMinutes(start), e = timeToMinutes(end);
-    if (e <= s && !(e === 1440 && s === 0)) {
-        return interaction.followUp({ content: 'End must be after start.', ephemeral: true });
-    }
+    const processedTimes = await validateAndProcessTimeInput(interaction, startRaw, endRaw, meeting.userAvailability[userId]?.[day] || [], 0);
+    if (!processedTimes) return;
+    const { start, end, s, e } = processedTimes;
 
     await runQueue(msgId, async () => {
         meeting.userAvailability[userId] = meeting.userAvailability[userId] || {};
         if (!meeting.userAvailability[userId][day]) {
             meeting.userAvailability[userId][day] = [];
         }
-        if (hasTimeRangeOverlap(start, end, meeting.userAvailability[userId][day])) {
-            return interaction.followUp({ content: 'That range overlaps with one you already submitted.', ephemeral: true });
-        }
+        
         meeting.userAvailability[userId][day].push([start, end]);
         dataStore.updateMeeting(msgId, meeting);
 

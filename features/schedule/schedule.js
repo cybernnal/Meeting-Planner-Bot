@@ -1,5 +1,5 @@
 const { ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, EmbedBuilder, ButtonBuilder, ButtonStyle, ComponentType } = require('discord.js');
-const fs = require('fs');
+const { parseAndValidateDateTime } = require('../../helpers/dateUtils');
 const dataStore = require('../../helpers/dataStore');
 
 const rolesToPing = [
@@ -52,33 +52,13 @@ async function handleScheduleCommand(interaction, client) {
         const time = interaction.fields.getTextInputValue('timeInput');
         const message = interaction.fields.getTextInputValue('messageInput');
 
-        const timeRegex = /^([01]?[0-9]|2[0-3]):[0-5][0-9]$/;
-        if (!timeRegex.test(time)) {
-            return interaction.reply({ content: '❌ Please enter the time in HH:MM format (e.g., 09:00 or 18:30).', ephemeral: true });
+        const dateTimeResult = parseAndValidateDateTime(dateString, time);
+
+        if (dateTimeResult.error) {
+            return interaction.reply({ content: dateTimeResult.error, ephemeral: true });
         }
 
-        let day, month, year;
-        const dateParts = dateString.split('/');
-
-        if (dateParts.length === 2) {
-            day = dateParts[0];
-            month = dateParts[1];
-            year = new Date().getFullYear().toString();
-        } else if (dateParts.length === 3) {
-            day = dateParts[0];
-            month = dateParts[1];
-            year = dateParts[2];
-            if (year.length === 2) {
-                year = `20${year}`;
-            }
-        } else {
-            return interaction.followUp({ content: '❌ Please enter the date in DD/MM or DD/MM/YY format.', ephemeral: true });
-        }
-
-        const [hours, minutes] = time.split(':').map(part => parseInt(part, 10));
-
-        const date = new Date(parseInt(year, 10), parseInt(month, 10) - 1, parseInt(day, 10), hours, minutes, 0);
-        const timestamp = Math.floor(date.getTime() / 1000);
+        const { date, timestamp, day, month, year } = dateTimeResult;
 
         const embed = new EmbedBuilder()
             .setTitle('Event Scheduled')
